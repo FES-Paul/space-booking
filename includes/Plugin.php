@@ -107,6 +107,21 @@ final class Plugin {
 				'dateFormat' => get_option( 'date_format', 'Y-m-d' ),
 			]
 		);
+
+		add_filter(
+			'script_loader_tag',
+			static function ( string $tag, string $handle ): string {
+				if ( 'space-booking-app' !== $handle ) {
+					return $tag;
+				}
+				if ( false !== strpos( $tag, 'type=' ) ) {
+					return $tag;
+				}
+				return str_replace( '<script ', '<script type="module" ', $tag );
+			},
+			10,
+			2
+		);
 	}
 
 	// ── Shortcodes ───────────────────────────────────────────────────────────
@@ -146,4 +161,5 @@ final class Plugin {
 		( new Admin\ExtraMetaBox() )->register();
 		( new Admin\PackageMetaBox() )->register();
 	}
+	
 }
