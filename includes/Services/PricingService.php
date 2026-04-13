@@ -59,11 +59,24 @@ final class PricingService {
 			];
 		}
 
-		// ── Standard pricing ──────────────────────────────────────────────────
-		$hourly_rate = (float) get_post_meta( $space_id, '_sb_hourly_rate', true );
-		$base_price  = round( $hourly_rate * $duration_hours, 2 );
+		// ── Price override segments ────────────────────────────────────────────
+		$segments = $this->get_price_segments( $space_id, $date, $start_time, $end_time );
+		$base_price = 0.0;
+		$base_breakdown = [];
+		foreach ( $segments as $seg ) {
+			$seg_hours = ( $seg['end_min'] - $seg['start_min'] ) / 60.0;
+			$seg_price = round( $seg['rate'] * $seg_hours, 2 );
+			$base_price += $seg_price;
+			$base_breakdown[] = [
+				'label' => sprintf( '%s–%s (%.1fh × $%.2f)', 
+					substr( $seg['start_time'], 0, 5 ), 
+					substr( $seg['end_time'], 0, 5 ), 
+					$seg_hours, $seg['rate'] ),
+				'amount' => $seg_price
+			];
+		}
 
-		// Apply temporal modifiers
+		// Apply temporal modifiers (to total base)
 		[ $modifier_price, $breakdown_modifiers ] = $this->apply_modifiers(
 			$space_id, $date, $start_time, $end_time, $base_price
 		);
@@ -72,7 +85,7 @@ final class PricingService {
 		$total        = $base_price + $modifier_price + $extras_price;
 
 		$breakdown = array_merge(
-			[ [ 'label' => "Base rate ({$duration_hours}h × \${$hourly_rate})", 'amount' => $base_price ] ],
+			$base_breakdown,
 			$breakdown_modifiers,
 			( $extras_price > 0 ? [ [ 'label' => 'Extras', 'amount' => $extras_price ] ] : [] )
 		);
@@ -212,9 +225,111 @@ final class PricingService {
 
 	// ── Helpers ───────────────────────────────────────────────────────────────
 
+	private function get_price_segments( int $space_id, string $date, string $start_time, string $end_time ): array {
+		$base_rate = (float) get_post_meta( $space_id, '_sb_hourly_rate', true );
+		$overrides = get_post_meta( $space_id, '_sb_price_overrides', true ) ?: [];
+
+		$booking_start_min = $this->time_to_minutes( $start_time );
+		$booking_end_min   = $this->time_to_minutes( $end_time );
+
+		$segments = [ [
+			'start_min'  => $booking_start_min,
+			'end_min'    => $booking_end_min,
+			'start_time' => $start_time,
+			'end_time'   => $end_time,
+			'rate'       => $base_rate
+		] ];
+
+		foreach ( $overrides as $ov ) {
+			$ov_days = $ov['days'] ?? [];
+			$date_wday = (new DateTime($date))->format('w'); // 0=Sun..6=Sat
+			if ( ! in_array( (int) $date_wday, $ov_days ) ) continue;
+
+			$ov_start_min = $this->time_to_minutes( $ov['start_time'] );
+			$ov_end_min   = $this->time_to_minutes( $ov['end_time'] );
+
+			$new_segments = [];
+			foreach ( $segments as $seg ) {
+				if ( $seg['end_min'] <= $ov_start_min || $seg['start_min'] >= $ov_end_min ) {
+					// No overlap
+					$new_segments[] = $seg;
+					continue;
+				}
+
+				// Pre-overlap
+				if ( $seg['start_min'] < $ov_start_min ) {
+					$new_segments[] = [
+						'start_min'  => $seg['start_min'],
+						'end_min'    => $ov_start_min,
+						'start_time' => $seg['start_time'],
+						'end_time'   => $this->minutes_to_time( $ov_start_min ),
+						'rate'       => $seg['rate']
+					];
+				}
+
+				// Overlap
+				$overlap_start = max( $seg['start_min'], $ov_start_min );
+				$overlap_end   = min( $seg['end_min'], $ov_end_min );
+				$new_segments[] = [
+					'start_min'  => $overlap_start,
+					'end_min'    => $overlap_end,
+					'start_time' => $this->minutes_to_time( $overlap_start ),
+					'end_time'   => $this->minutes_to_time( $overlap_end ),
+					'rate'       => (float) $ov['hourly_rate']
+				];
+
+				// Post-overlap
+				if ( $seg['end_min'] > $ov_end_min ) {
+					$new_segments[] = [
+						'start_min'  => $ov_end_min,
+						'end_min'    => $seg['end_min'],
+						'start_time' => $this->minutes_to_time( $ov_end_min ),
+						'end_time'   => $seg['end_time'],
+						'rate'       => $seg['rate']
+					];
+				}
+			}
+			$segments = $new_segments;
+		}
+
+		// Merge adjacent same-rate segments
+		return $this->merge_segments( $segments );
+	}
+
+	private function time_to_minutes( string $time ): int {
+		[ $h, $m ] = explode( ':', $time );
+		return (int) $h * 60 + (int) $m;
+	}
+
+	private function minutes_to_time( int $minutes ): string {
+		$h = floor( $minutes / 60 );
+		$m = $minutes % 60;
+		return sprintf( '%02d:%02d', $h, $m );
+	}
+
+	private function merge_segments( array $segments ): array {
+		if ( empty( $segments ) ) return [];
+
+		usort( $segments, fn( $a, $b ) => $a['start_min'] <=> $b['start_min'] );
+		$merged = [ $segments[0] ];
+
+		foreach ( $segments as $seg ) {
+			$last = &$merged[ count( $merged ) - 1 ];
+			if ( $last['end_min'] === $seg['start_min'] && $last['rate'] === $seg['rate'] ) {
+				$last['end_min'] = $seg['end_min'];
+				$last['end_time'] = $seg['end_time'];
+			} else {
+				$merged[] = $seg;
+			}
+		}
+
+		return $merged;
+	}
+
 	private function hours_between( string $start, string $end ): float {
 		$s = new DateTime( "1970-01-01 {$start}" );
 		$e = new DateTime( "1970-01-01 {$end}" );
 		return round( ( $e->getTimestamp() - $s->getTimestamp() ) / 3600, 2 );
 	}
 }
+
