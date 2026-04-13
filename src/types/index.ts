@@ -104,6 +104,7 @@ declare global {
       nonce: string;
       stripeKey: string;
       currency: string;
+      symbol: string;
       dateFormat: string;
     };
   }

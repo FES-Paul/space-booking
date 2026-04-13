@@ -65,15 +65,17 @@ final class PricingService {
 		$base_breakdown = [];
 		foreach ( $segments as $seg ) {
 			$seg_hours = ( $seg['end_min'] - $seg['start_min'] ) / 60.0;
-			$seg_price = round( $seg['rate'] * $seg_hours, 2 );
-			$base_price += $seg_price;
-			$base_breakdown[] = [
-				'label' => sprintf( '%s–%s (%.1fh × $%.2f)', 
-					substr( $seg['start_time'], 0, 5 ), 
-					substr( $seg['end_time'], 0, 5 ), 
-					$seg_hours, $seg['rate'] ),
-				'amount' => $seg_price
-			];
+					$seg_price = round( $seg['rate'] * $seg_hours, 2 );
+					$base_price += $seg_price;
+					$symbol = \SpaceBooking\Services\CurrencyService::get_symbol();
+					$base_breakdown[] = [
+						'label' => sprintf( '%s–%s (%.1fh × %s%.2f)', 
+							substr( $seg['start_time'], 0, 5 ), 
+							substr( $seg['end_time'], 0, 5 ), 
+							$seg_hours, $symbol, $seg['rate'] ),
+						'amount' => $seg_price
+					];
+
 		}
 
 		// Apply temporal modifiers (to total base)
@@ -161,10 +163,12 @@ final class PricingService {
 
 			$modifier_sum += $amount;
 			$applied_rank  = $rank;
+			$symbol = \SpaceBooking\Services\CurrencyService::get_symbol();
 			$breakdown[]   = [
 				'label'  => $rule['label'] ?? ucfirst( str_replace( '_', ' ', $rule['rule_type'] ) ),
 				'amount' => $amount,
 			];
+
 			$applied[] = $rule['id'];
 		}
 

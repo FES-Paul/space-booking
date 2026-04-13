@@ -36,9 +36,11 @@ final class ExtraMetaBox {
 		?>
 		<table class="form-table" role="presentation">
 			<tr>
-				<th><label for="sb_extra_price"><?php esc_html_e( 'Price ($)', 'space-booking' ); ?></label></th>
+				<?php $symbol = \SpaceBooking\Services\CurrencyService::get_symbol(); ?>
+				<th><label for="sb_extra_price"><?php printf( esc_html__('Price (%s)', 'space-booking'), $symbol ); ?></label></th>
 				<td><input type="number" id="sb_extra_price" name="sb_extra_price" step="0.01" min="0"
 					value="<?php echo esc_attr( $price ); ?>" class="regular-text"></td>
+
 			</tr>
 			<tr>
 				<th><label for="sb_inventory"><?php esc_html_e( 'Inventory Qty', 'space-booking' ); ?></label></th>

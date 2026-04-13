@@ -38,9 +38,11 @@ final class PackageMetaBox {
 		?>
 		<table class="form-table" role="presentation">
 			<tr>
-				<th><label for="sb_package_price"><?php esc_html_e( 'Flat Price ($)', 'space-booking' ); ?></label></th>
+				<?php $symbol = \SpaceBooking\Services\CurrencyService::get_symbol(); ?>
+				<th><label for="sb_package_price"><?php printf( esc_html__('Flat Price (%s)', 'space-booking'), $symbol ); ?></label></th>
 				<td><input type="number" id="sb_package_price" name="sb_package_price" step="0.01" min="0"
 					value="<?php echo esc_attr( $price ); ?>" class="regular-text"></td>
+
 			</tr>
 			<tr>
 				<th><label for="sb_package_space_id"><?php esc_html_e( 'Space', 'space-booking' ); ?></label></th>
@@ -71,7 +73,8 @@ final class PackageMetaBox {
 								<?php checked( in_array( $extra->ID, array_map( 'intval', $extra_ids ), true ) ); ?>>
 							<?php echo esc_html( $extra->post_title ); ?>
 							<small style="color:#666">
-								($<?php echo esc_html( number_format( (float) get_post_meta( $extra->ID, '_sb_extra_price', true ), 2 ) ); ?>)
+								(<?php echo \SpaceBooking\Services\CurrencyService::format( (float) get_post_meta( $extra->ID, '_sb_extra_price', true ) ); ?>)
+
 							</small>
 						</label>
 					<?php endforeach; ?>

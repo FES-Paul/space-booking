@@ -80,9 +80,11 @@ final class SpaceMetaBox
 		</style>
 		<div class="sb-meta-grid">
 			<div class="sb-meta-field">
-				<label for="sb_hourly_rate"><?php esc_html_e('Hourly Rate ($)', 'space-booking'); ?></label>
+				<?php $symbol = \SpaceBooking\Services\CurrencyService::get_symbol(); ?>
+				<label for="sb_hourly_rate"><?php printf( esc_html__('Hourly Rate (%s)', 'space-booking'), $symbol ); ?></label>
 				<input type="number" id="sb_hourly_rate" name="sb_hourly_rate" step="0.01" min="0"
 					value="<?php echo esc_attr($rate); ?>">
+
 			</div>
 			<div class="sb-meta-field">
 				<label for="sb_capacity"><?php esc_html_e('Capacity (guests)', 'space-booking'); ?></label>

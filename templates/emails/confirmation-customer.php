@@ -50,8 +50,9 @@ $space_name = get_the_title( (int) $booking['space_id'] );
       <?php endif; ?>
       <tr class="total-row">
         <th><?php esc_html_e( 'Total Paid', 'space-booking' ); ?></th>
-        <td>$<?php echo esc_html( number_format( (float) $booking['total_price'], 2 ) ); ?></td>
+        <td><?php echo \SpaceBooking\Services\CurrencyService::format( (float) $booking['total_price'] ); ?></td>
       </tr>
+
     </table>
 
     <p><?php esc_html_e( 'Need to view or change your booking?', 'space-booking' ); ?></p>

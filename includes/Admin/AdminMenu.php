@@ -149,7 +149,8 @@ final class AdminMenu {
 					<p style="color:#666;margin:0"><?php esc_html_e( 'Pending Bookings', 'space-booking' ); ?></p>
 				</div>
 				<div class="sb-stat-card" style="background:#fff;padding:20px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.1)">
-					<h3 style="margin:0 0 8px">$<?php echo esc_html( number_format( $total_revenue, 2 ) ); ?></h3>
+					<h3 style="margin:0 0 8px"><?php echo \SpaceBooking\Services\CurrencyService::format( $total_revenue ); ?></h3>
+
 					<p style="color:#666;margin:0"><?php esc_html_e( 'Total Revenue', 'space-booking' ); ?></p>
 				</div>
 			</div>
@@ -219,7 +220,7 @@ final class AdminMenu {
 					<?php $this->settings_row( 'sb_global_open_time',       __( 'Global Opening Time', 'space-booking' ), 'time' ); ?>
 					<?php $this->settings_row( 'sb_global_close_time',       __( 'Global Closing Time', 'space-booking' ), 'time' ); ?>
 					<?php $this->settings_row( 'sb_slot_interval_minutes',   __( 'Slot Interval (minutes)', 'space-booking' ), 'number' ); ?>
-					<?php $this->settings_row( 'sb_currency',                __( 'Currency Code (e.g. usd)', 'space-booking' ), 'text' ); ?>
+<?php \SpaceBooking\Services\CurrencyService::render_select( 'sb_currency' ); ?><p class="description"><?php esc_html_e( 'Select your currency. Prices will be displayed with the appropriate symbol.', 'space-booking' ); ?></p>
 					<?php $this->settings_row( 'sb_stripe_publishable_key',  __( 'Stripe Publishable Key', 'space-booking' ), 'text' ); ?>
 					<?php $this->settings_row( 'sb_stripe_secret_key',       __( 'Stripe Secret Key', 'space-booking' ), 'password' ); ?>
 					<?php $this->settings_row( 'sb_stripe_webhook_secret',   __( 'Stripe Webhook Secret', 'space-booking' ), 'password' ); ?>

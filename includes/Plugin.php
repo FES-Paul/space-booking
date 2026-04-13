@@ -115,8 +115,10 @@ final class Plugin
 					'apiBase'    => rest_url('space-booking/v1'),
 					'nonce'      => wp_create_nonce('wp_rest'),
 					'stripeKey'  => get_option('sb_stripe_publishable_key', ''),
-					'currency'   => get_option('sb_currency', 'usd'),
+					'currency'   => get_option('sb_currency', 'USD'),
+					'symbol'     => \SpaceBooking\Services\CurrencyService::get_symbol(),
 					'dateFormat' => get_option('date_format', 'Y-m-d'),
+
 				]
 			);
 

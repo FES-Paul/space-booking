@@ -60,9 +60,10 @@ export function Step1Selection() {
                 <h3 className="sb-card__title">{space.title}</h3>
                 <p className="sb-card__excerpt">{space.excerpt}</p>
                 <p className="sb-card__price">
-                  ${space.hourly_rate.toFixed(2)} / hr
+                  {window.sbConfig.symbol}{space.hourly_rate.toFixed(2)} / hr
                   {space.capacity > 0 && ` · Up to ${space.capacity} guests`}
                 </p>
+
               </div>
               {selectedSpace?.id === space.id && (
                 <span className="sb-card__check" aria-label="Selected">✓</span>
@@ -94,10 +95,11 @@ export function Step1Selection() {
                 <h3 className="sb-card__title">{pkg.title}</h3>
                 <p className="sb-card__excerpt">{pkg.description}</p>
                 <p className="sb-card__price">
-                  ${pkg.price.toFixed(2)} flat
+                  {window.sbConfig.symbol}{pkg.price.toFixed(2)} flat
                   {pkg.space_name && ` · ${pkg.space_name}`}
                   {pkg.duration > 0 && ` · ${pkg.duration}h`}
                 </p>
+
               </div>
               {selectedPackage?.id === pkg.id && (
                 <span className="sb-card__check" aria-label="Selected">✓</span>

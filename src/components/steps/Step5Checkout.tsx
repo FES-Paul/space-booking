@@ -139,12 +139,12 @@ function CheckoutForm() {
           {priceBreakdown.map((item, i) => (
             <li key={i} className="sb-breakdown__item">
               <span>{item.label}</span>
-              <span>${item.amount.toFixed(2)}</span>
+              <span>{item.amount.toFixed(2)} {window.sbConfig.symbol}</span>
             </li>
           ))}
         </ul>
         <div className="sb-breakdown__total">
-          Total Due: <strong>${totalPrice.toFixed(2)}</strong>
+          Total Due: <strong>{totalPrice.toFixed(2)} {window.sbConfig.symbol}</strong>
         </div>
 
         {error && <div className="sb-error">{error}</div>}
@@ -179,7 +179,7 @@ function CheckoutForm() {
           className="sb-btn sb-btn--primary"
           disabled={!stripe || !elements || loading}
         >
-          {loading ? 'Processing…' : `Pay $${totalPrice.toFixed(2)}`}
+          {loading ? 'Processing…' : `Pay ${totalPrice.toFixed(2)} {window.sbConfig.symbol}`}
         </button>
       </div>
     </form>
@@ -214,3 +214,4 @@ export function Step5Checkout() {
     </div>
   );
 }
+

@@ -30,9 +30,13 @@ final class StripeService {
 	 */
 	public function create_payment_intent(
 		int $amount_cents,
-		string $currency,
+		string $currency = '',
 		array $metadata = []
 	): array {
+		if ( empty( $currency ) ) {
+			$currency = \SpaceBooking\Services\CurrencyService::get_currency();
+		}
+
 		$body = [
 			'amount'               => $amount_cents,
 			'currency'             => strtolower( $currency ),

@@ -30,7 +30,8 @@ $admin_url  = admin_url( 'admin.php?page=space-booking' );
     <?php if ( ! empty( $extras ) ) : ?>
     <tr><th>Extras</th><td><?php echo esc_html( implode( ', ', array_column( $extras, 'extra_name' ) ) ); ?></td></tr>
     <?php endif; ?>
-    <tr><th>Total</th><td><strong>$<?php echo esc_html( number_format( (float) $booking['total_price'], 2 ) ); ?></strong></td></tr>
+    <tr><th>Total</th><td><strong><?php echo \SpaceBooking\Services\CurrencyService::format( (float) $booking['total_price'] ); ?></strong></td></tr>
+
     <tr><th>Status</th><td><?php echo esc_html( ucfirst( $booking['status'] ) ); ?></td></tr>
   </table>
   <a class="btn" href="<?php echo esc_url( $admin_url ); ?>">View in Admin →</a>
