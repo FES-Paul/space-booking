@@ -190,10 +190,11 @@ final class AdminMenu {
 	}
 
 	public function page_bookings(): void {
-		echo '<div class="wrap"><h1>' . esc_html__( 'All Bookings', 'space-booking' ) . '</h1>';
-		// Full bookings table (extends WP_List_Table in production)
-		$this->page_dashboard();
-		echo '</div>';
+		?>
+		<div class="wrap">
+			<?php include __DIR__ . '/../../templates/admin/page-bookings.php'; ?>
+		</div>
+		<?php
 	}
 
 	public function page_pricing(): void {
