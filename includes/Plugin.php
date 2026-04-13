@@ -144,6 +144,14 @@ final class Plugin
 				? require $asset_file
 				: ['dependencies' => [], 'version' => SB_VERSION];
 
+
+			wp_enqueue_style(
+				'sb-lookup-app',
+				SB_ASSETS_URL . 'css/styles.css',
+				[],
+				$asset['version']
+			);
+
 			wp_enqueue_script(
 				'sb-lookup-app',
 				SB_ASSETS_URL . 'js/lookup-app.js',
