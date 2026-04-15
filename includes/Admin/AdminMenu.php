@@ -111,6 +111,8 @@ final class AdminMenu {
 			'sb_global_open_time'       => 'sanitize_text_field',
 			'sb_global_close_time'      => 'sanitize_text_field',
 			'sb_slot_interval_minutes'  => 'absint',
+			'sb_buffer_pre_minutes'     => 'absint',
+			'sb_buffer_post_minutes'    => 'absint',
 			'sb_currency'               => 'sanitize_text_field',
 			'sb_stripe_publishable_key' => 'sanitize_text_field',
 			'sb_stripe_secret_key'      => 'sanitize_text_field',
@@ -243,6 +245,12 @@ final class AdminMenu {
             <?php $this->settings_row( 'sb_global_open_time',       __( 'Global Opening Time', 'space-booking' ), 'time' ); ?>
             <?php $this->settings_row( 'sb_global_close_time',       __( 'Global Closing Time', 'space-booking' ), 'time' ); ?>
             <?php $this->settings_row( 'sb_slot_interval_minutes',   __( 'Slot Interval (minutes)', 'space-booking' ), 'number' ); ?>
+            <?php $this->settings_row( 'sb_buffer_pre_minutes', __( 'Global Pre-Event Buffer (minutes)', 'space-booking' ), 'number' ); ?>
+            <p class="description">
+                <?php esc_html_e( 'Minutes added before each booking start (cleanup/setup time). Blocks availability.', 'space-booking' ); ?>
+            </p>
+            <?php $this->settings_row( 'sb_buffer_post_minutes', __( 'Global Post-Event Buffer (minutes)', 'space-booking' ), 'number' ); ?>
+            <p class="description"><?php esc_html_e( 'Minutes added after each booking end.', 'space-booking' ); ?></p>
             <?php \SpaceBooking\Services\CurrencyService::render_select( 'sb_currency' ); ?><p class="description">
                 <?php esc_html_e( 'Select your currency. Prices will be displayed with the appropriate symbol.', 'space-booking' ); ?>
             </p>
