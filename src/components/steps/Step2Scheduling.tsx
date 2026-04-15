@@ -23,19 +23,6 @@ export function Step2Scheduling() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const isContinuousSpan = (startTime: string, endTime: string): boolean => {
-    const startMin = timeToMinutes(startTime);
-    const endMin = timeToMinutes(endTime);
-    for (const slot of slots) {
-      const slotStartMin = timeToMinutes(slot.start);
-      const slotEndMin = timeToMinutes(slot.end);
-      if (slotEndMin <= startMin) continue;
-      if (slotStartMin >= endMin) break;
-      if (!slot.available) return false;
-    }
-    return true;
-  };
-
   const timeToMinutes = (timeStr: string): number => {
     const [h, m] = timeStr.split(":").map(Number);
     return h * 60 + m;
@@ -64,13 +51,14 @@ export function Step2Scheduling() {
       .finally(() => setLoading(false));
   }, [selectedDate, spaceId]);
 
-  // Build end-time options: cumulative ends where prefix is continuous available
+  // Sequential available post-start slots (buffer-trusting)
   const endTimeOptions: TimeSlot[] = [];
-  for (let i = 0; i < slots.length; i++) {
-    const candidateEndSlot = slots[i];
-    if (candidateEndSlot.start <= selectedStartTime) continue;
-    if (!isContinuousSpan(selectedStartTime, candidateEndSlot.end)) break;
-    endTimeOptions.push(candidateEndSlot);
+  const startIndex = slots.findIndex((s) => s.start === selectedStartTime);
+  if (startIndex >= 0) {
+    for (let j = startIndex + 1; j < slots.length && j < startIndex + 8; j++) {
+      if (!slots[j].available) break;
+      endTimeOptions.push(slots[j]);
+    }
   }
 
   const canProceed = selectedDate && selectedStartTime && selectedEndTime;
@@ -131,13 +119,22 @@ export function Step2Scheduling() {
                 value={selectedEndTime}
                 onChange={(e) => setEndTime(e.target.value)}
               >
-                <option value="">Select end time…</option>
-                {endTimeOptions.map((slot) => {
-                  const hours =
-                    Math.round(
-                      timeToMinutes(slot.end) -
-                        timeToMinutes(selectedStartTime),
-                    ) / 60;
+                <option
+                  value={
+                    slots.find((s) => s.start === selectedStartTime)?.end || ""
+                  }
+                >
+                  1h (
+                  {slots.find((s) => s.start === selectedStartTime)?.end ||
+                    "..."}
+                  )
+                </option>
+                {endTimeOptions.map((slot, i) => {
+                  const hours = Math.round(
+                    (timeToMinutes(slot.end) -
+                      timeToMinutes(selectedStartTime)) /
+                      60,
+                  );
                   const tooShort = hours < minDuration;
                   const tooLong = hours > maxDuration;
                   return (
@@ -146,8 +143,7 @@ export function Step2Scheduling() {
                       value={slot.end}
                       disabled={tooShort || tooLong}
                     >
-                      {slot.end} ({hours}h
-                      {tooShort ? " – min" : tooLong ? " – max" : ""})
+                      {hours}h ({slot.end})
                     </option>
                   );
                 })}
