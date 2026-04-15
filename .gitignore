@@ -37,3 +37,4 @@ vendor/
 # WordPress/plugin temporary files
 *.tmp
 *.temp
+*TODO*.md

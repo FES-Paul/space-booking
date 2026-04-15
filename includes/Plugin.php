@@ -230,5 +230,47 @@ final class Plugin
 		(new Admin\SpaceMetaBox())->register();
 		(new Admin\ExtraMetaBox())->register();
 		(new Admin\PackageMetaBox())->register();
+
+		// Export/Import AJAX
+		add_action('wp_ajax_sb_export_data', [$this, 'ajax_export_data']);
+		add_action('wp_ajax_sb_import_data', [$this, 'ajax_import_data']);
+	}
+
+	public function ajax_export_data(): void {
+		check_ajax_referer('sb_export_import', '_wpnonce');
+
+		if (!current_user_can('manage_options')) {
+			wp_die('Unauthorized');
+		}
+
+		$service = new \SpaceBooking\Services\ExportImportService();
+		$json = $service->export_json();
+
+		@header('Content-Type: application/json');
+		@header('Content-Disposition: attachment; filename="space-booking-data.json"');
+		@header('Content-Length: ' . strlen($json));
+		echo $json;
+		wp_die();
+	}
+
+	public function ajax_import_data(): void {
+		check_ajax_referer('sb_export_import', '_wpnonce');
+
+		if (!current_user_can('manage_options')) {
+			wp_send_json_error('Unauthorized');
+		}
+
+		if (empty($_FILES['json_file']['tmp_name'])) {
+			wp_send_json_error('No file uploaded');
+		}
+
+		$service = new \SpaceBooking\Services\ExportImportService();
+		$result = $service->import_json($_FILES['json_file']['tmp_name'], !empty($_POST['delete_existing']));
+
+		if ($result[0]) {
+			wp_send_json_success($result[1]);
+		} else {
+			wp_send_json_error($result[1]);
+		}
 	}
 }
