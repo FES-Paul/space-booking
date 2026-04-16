@@ -16,7 +16,8 @@ final class WooCommerceIntegration
             return;
         }
 
-        add_action('woocommerce_init', [self::class, 'populate_pending_cart'], 10);
+        // Use template_redirect for cart/checkout page load after session ready
+        add_action('template_redirect', [self::class, 'populate_pending_cart'], 20);
         add_action('woocommerce_checkout_order_processed', [self::class, 'save_order_meta'], 10, 3);
         add_action('woocommerce_payment_complete', [self::class, 'confirm_booking'], 10, 1);
         add_action('woocommerce_order_status_pending_to_processing', [self::class, 'confirm_booking'], 10, 1);
@@ -24,20 +25,41 @@ final class WooCommerceIntegration
 
     public static function populate_pending_cart(): void
     {
-        $pending = WC()->session ? WC()->session->get('sb_pending_booking') : null;
-        if (!$pending || !isset($pending['booking_id'])) {
+        error_log('SpaceBooking: Template Redirect Heartbeat - URL: ' . $_SERVER['REQUEST_URI']);
+
+        if (!is_cart() && !is_checkout()) {
             return;
         }
 
+        if (null === WC()->session) {
+            return;
+        }
+
+        error_log('SpaceBooking WC populate_pending_cart triggered on ' . (is_cart() ? 'cart' : 'checkout'));
+        $pending = WC()->session->get('sb_pending_booking');
+        if (!$pending || !isset($pending['booking_id'])) {
+            error_log('SpaceBooking WC no pending booking in session');
+            return;
+        }
+
+        error_log('SpaceBooking WC populating pending booking #' . $pending['booking_id']);
+        error_log('REST Session ID: ' . WC()->session->get_customer_id());  // For comparison
+
         $wc = new \SpaceBooking\Services\WooCommerceService();
-        $checkout_url = $wc->add_booking_to_cart(
-            $pending['booking_data'],
-            $pending['total_price'],
-            $pending['booking_id']
-        );
+        try {
+            $wc->add_booking_to_cart(
+                $pending['booking_data'],
+                $pending['total_price'],
+                $pending['booking_id']
+            );
+            error_log('SpaceBooking WC populate success for #' . $pending['booking_id']);
+        } catch (Exception $e) {
+            error_log('SpaceBooking WC populate failed: ' . $e->getMessage());
+        }
 
         // Clear session
         WC()->session->set('sb_pending_booking', null);
+        error_log('SpaceBooking WC pending cleared');
     }
 
     /**

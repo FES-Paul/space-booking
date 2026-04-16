@@ -65,17 +65,14 @@ final class Plugin
 			(new AvailabilityController())->register_routes();
 			(new BookingController())->register_routes();
 			(new CustomerController())->register_routes();
+			(new \SpaceBooking\Controllers\PricingController())->register_routes();
 			// (new WebhookController())->register_routes(); // Disabled for WooCommerce
 		});
 	}
 
 	private function register_wc_hooks(): void
 	{
-		add_action('plugins_loaded', static function (): void {
-			if (class_exists('WooCommerce')) {
-				\SpaceBooking\Integrations\WooCommerceIntegration::init();
-			}
-		});
+		\SpaceBooking\Integrations\WooCommerceIntegration::init();
 	}
 
 	// ── Assets ───────────────────────────────────────────────────────────────

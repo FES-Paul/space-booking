@@ -29,17 +29,33 @@ final class WooCommerceService
             throw new \RuntimeException('WooCommerce cart not available.');
         }
 
+        error_log('SpaceBooking WC: Creating product for booking #' . $booking_id);
+
         // Create virtual product on-the-fly
         $product = new WC_Product_Simple();
         $product->set_name(sprintf('Booking #%d - %s', $booking_id, get_the_title($booking_data['space_id'])));
         $product->set_price($total_price);
+        $product->set_status('publish');
+        $product->set_catalog_visibility('hidden');
         $product->set_virtual(true);
+        $product->set_manage_stock(false);
+        $product->set_stock_status('instock');
+        $product->set_catalog_visibility('catalog');
+        $product->set_regular_price($total_price);
+        $product->set_description('Space booking service - #' . $booking_id);
         $product->save();
+
+        error_log('SpaceBooking WC: Product ID ' . $product->get_id() . ' published, price $' . $total_price);
+        error_log('SpaceBooking WC: Product virtual=' . ($product->is_virtual() ? 'yes' : 'no') . ', price=' . $product->get_price() . ', status=' . $product->get_status());
 
         // Clear cart if needed
         WC()->cart->empty_cart();
+        error_log('SpaceBooking WC: Cart emptied, items count after: ' . sizeof(WC()->cart->get_cart()));
 
         // Add to cart with meta
+        wc_clear_notices();
+        $errors_before = wc_get_notices('error');
+        error_log('SpaceBooking WC: About to add_to_cart product_id=' . $product->get_id() . ', cart_errors_before: ' . json_encode($errors_before ?: 'none'));
         $cart_item_key = WC()->cart->add_to_cart(
             $product->get_id(),
             1,
@@ -53,14 +69,23 @@ final class WooCommerceService
                 'sb_end_time' => $booking_data['end_time'],
                 'sb_customer_name' => $booking_data['customer_name'],
                 'sb_customer_email' => $booking_data['customer_email'],
-                'sb_extras' => $booking_data['extras'] ?? [],
-                'sb_breakdown' => $booking_data['breakdown'] ?? [],
+                'sb_extras' => wp_json_encode($booking_data['extras'] ?? []),
+                'sb_breakdown' => wp_json_encode($booking_data['breakdown'] ?? []),
             ]
         );
+        $errors_after = wc_get_notices('error');
+        error_log('SpaceBooking WC: add_to_cart returned key: ' . ($cart_item_key ?: 'NULL/FALSE') . ', cart_errors_after: ' . json_encode($errors_after ?: 'none') . ', cart count: ' . WC()->cart->get_cart_contents_count());
 
         if (!$cart_item_key) {
-            throw new \RuntimeException('Failed to add booking to cart.');
+            $fail_errors = wc_get_notices('error') ?: 'none';
+            error_log('SpaceBooking WC: add_to_cart FAILED. Key null. Full cart errors: ' . json_encode($fail_errors));
+            WC()->cart->empty_cart('yes');  // Clear invalid state
+            $fail_notices = wc_get_notices('error');
+            $fail_msgs = array_column($fail_notices ?: [], 'notice');
+            throw new \RuntimeException('Failed to add booking to cart. Cart errors: ' . implode(', ', $fail_msgs));
         }
+
+        error_log('SpaceBooking WC: Booking #' . $booking_id . ' added to cart key: ' . $cart_item_key);
 
         // Redirect to checkout
         return wc_get_checkout_url();

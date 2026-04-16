@@ -121,7 +121,8 @@ final class BookingController extends WP_REST_Controller
 		}
 
 		// ── Add to WooCommerce cart or session ────────────────────────────────
-		$checkout_url = wc_get_checkout_url();
+		$checkout_url = wc_get_cart_url();  // Default to cart
+		$cart_added = false;
 		try {
 			$checkout_url = $this->wc->add_booking_to_cart([
 				'space_id' => $space_id,
@@ -134,9 +135,16 @@ final class BookingController extends WP_REST_Controller
 				'extras' => $extras,
 				'breakdown' => $price['breakdown'],
 			], $price['total_price'], $booking_id);
+			$cart_added = true;
+			error_log('SpaceBooking: Booking #' . $booking_id . ' added to cart directly');
 		} catch (\RuntimeException $e) {
+			error_log('SpaceBooking: Direct cart add failed for #' . $booking_id . ': ' . $e->getMessage());
 			// Fallback: Store in session for checkout page
-			if (function_exists('WC') && WC()->session) {
+			if (function_exists('WC')) {
+				if (!WC()->session) {
+					wc_load_cart();
+				}
+				error_log('REST Session ID: ' . WC()->session->get_customer_id());
 				WC()->session->set('sb_pending_booking', [
 					'booking_id' => $booking_id,
 					'booking_data' => [
@@ -152,14 +160,20 @@ final class BookingController extends WP_REST_Controller
 					],
 					'total_price' => $price['total_price'],
 				]);
+				error_log('SpaceBooking: Booking #' . $booking_id . ' stored in WC session for pending cart');
+			} else {
+				error_log('SpaceBooking: WC not available for session');
 			}
 		}
+
+		error_log('SpaceBooking: Booking #' . $booking_id . ' → checkout_url: ' . $checkout_url . ' (cart_direct: ' . json_encode($cart_added) . ')');
 
 		return new WP_REST_Response([
 			'booking_id' => $booking_id,
 			'checkout_url' => $checkout_url,
 			'total_price' => $price['total_price'],
 			'breakdown' => $price['breakdown'],
+			'cart_added_directly' => $cart_added,
 		], 201);
 	}
 
