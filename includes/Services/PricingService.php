@@ -44,8 +44,7 @@ final class PricingService
 			$extras_price = $this->calculate_extras($extras);
 			$total = $package_price + $extras_price;
 
-			[$pre_buf, $post_buf] = (new AvailabilityService())->resolve_buffers($space_id);
-			$display_duration = $duration_hours + ($pre_buf + $post_buf) / 60.0;
+			$display_duration = $duration_hours;
 			return [
 				'base_price' => $package_price,
 				'modifier_price' => 0.0,
@@ -53,14 +52,10 @@ final class PricingService
 				'total_price' => $total,
 				'duration_hours' => $duration_hours,
 				'display_duration' => round($display_duration, 1),
-				'pre_buffer' => $pre_buf,
-				'post_buffer' => $post_buf,
 				'breakdown' => [
 					['label' => 'Package price', 'amount' => $package_price],
-					['label' => sprintf('Pre buffer (%dmin)', $pre_buf), 'amount' => 0],
-					['label' => sprintf('Post buffer (%dmin)', $post_buf), 'amount' => 0],
 					['label' => 'Extras', 'amount' => $extras_price],
-					['label' => 'Total booking time', 'amount' => 0, 'info' => sprintf('%.1fh + buffers', $display_duration)],
+					['label' => 'Total booking time', 'amount' => 0, 'info' => sprintf('%.1fh', $display_duration)],
 				],
 			];
 		}
@@ -89,19 +84,14 @@ final class PricingService
 			$space_id, $date, $start_time, $end_time, $base_price
 		);
 
-		[$pre_buf, $post_buf] = (new AvailabilityService())->resolve_buffers($space_id);
-		$display_duration = $duration_hours + ($pre_buf + $post_buf) / 60.0;
+		$display_duration = $duration_hours;
 		$extras_price = $this->calculate_extras($extras);
 		$total = $base_price + $modifier_price + $extras_price;
 
 		$breakdown = array_merge(
 			$base_breakdown,
 			$breakdown_modifiers,
-			($extras_price > 0 ? [['label' => 'Extras', 'amount' => $extras_price]] : []),
-			[
-				['label' => sprintf('Pre-event buffer (%dmin)', $pre_buf), 'amount' => 0.0],
-				['label' => sprintf('Post-event buffer (%dmin)', $post_buf), 'amount' => 0.0],
-			]
+			($extras_price > 0 ? [['label' => 'Extras', 'amount' => $extras_price]] : [])
 		);
 
 		return [
@@ -111,8 +101,6 @@ final class PricingService
 			'total_price' => round($total, 2),
 			'duration_hours' => $duration_hours,
 			'display_duration' => round($display_duration, 1),
-			'pre_buffer' => $pre_buf,
-			'post_buffer' => $post_buf,
 			'breakdown' => $breakdown,
 		];
 	}
