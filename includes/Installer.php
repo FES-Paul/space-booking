@@ -108,6 +108,8 @@ final class Installer {
 		add_option( 'sb_admin_email',              get_option( 'admin_email' ) );
 		add_option( 'sb_email_from_name',          get_option( 'blogname' ) );
 		add_option( 'sb_magic_link_ttl_minutes',   '30' );
+		add_option( 'sb_buffer_pre_minutes',   15 );
+		add_option( 'sb_buffer_post_minutes',  15 );
 		add_option( 'sb_booking_confirmation_tpl',  '' );
 	}
 }

@@ -82,6 +82,16 @@ final class AdminMenu {
 			[ $this, 'page_pricing' ]
 		);
 
+		// Tools (Export/Import)
+		add_submenu_page(
+			'space-booking',
+			__( 'Tools', 'space-booking' ),
+			__( 'Tools', 'space-booking' ),
+			'manage_options',
+			'space-booking-tools',
+			[ $this, 'page_tools' ]
+		);
+
 		// Settings
 		add_submenu_page(
 			'space-booking',
@@ -93,6 +103,7 @@ final class AdminMenu {
 		);
 	}
 
+
 	// ── Settings API ─────────────────────────────────────────────────────────
 
 	public function register_settings(): void {
@@ -100,6 +111,8 @@ final class AdminMenu {
 			'sb_global_open_time'       => 'sanitize_text_field',
 			'sb_global_close_time'      => 'sanitize_text_field',
 			'sb_slot_interval_minutes'  => 'absint',
+			'sb_buffer_pre_minutes'     => 'absint',
+			'sb_buffer_post_minutes'    => 'absint',
 			'sb_currency'               => 'sanitize_text_field',
 			'sb_stripe_publishable_key' => 'sanitize_text_field',
 			'sb_stripe_secret_key'      => 'sanitize_text_field',
@@ -136,102 +149,131 @@ final class AdminMenu {
 			ARRAY_A
 		);
 		?>
-		<div class="wrap">
-			<h1><?php esc_html_e( 'Space Booking Dashboard', 'space-booking' ); ?></h1>
+<div class="wrap">
+    <h1><?php esc_html_e( 'Space Booking Dashboard', 'space-booking' ); ?></h1>
 
-			<div class="sb-admin-stats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin:20px 0">
-				<div class="sb-stat-card" style="background:#fff;padding:20px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.1)">
-					<h3 style="margin:0 0 8px"><?php echo esc_html( number_format( $total_confirmed ) ); ?></h3>
-					<p style="color:#666;margin:0"><?php esc_html_e( 'Confirmed Bookings', 'space-booking' ); ?></p>
-				</div>
-				<div class="sb-stat-card" style="background:#fff;padding:20px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.1)">
-					<h3 style="margin:0 0 8px"><?php echo esc_html( number_format( $total_pending ) ); ?></h3>
-					<p style="color:#666;margin:0"><?php esc_html_e( 'Pending Bookings', 'space-booking' ); ?></p>
-				</div>
-				<div class="sb-stat-card" style="background:#fff;padding:20px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.1)">
-					<h3 style="margin:0 0 8px"><?php echo \SpaceBooking\Services\CurrencyService::format( $total_revenue ); ?></h3>
+    <div class="sb-admin-stats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin:20px 0">
+        <div class="sb-stat-card"
+            style="background:#fff;padding:20px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.1)">
+            <h3 style="margin:0 0 8px"><?php echo esc_html( number_format( $total_confirmed ) ); ?></h3>
+            <p style="color:#666;margin:0"><?php esc_html_e( 'Confirmed Bookings', 'space-booking' ); ?></p>
+        </div>
+        <div class="sb-stat-card"
+            style="background:#fff;padding:20px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.1)">
+            <h3 style="margin:0 0 8px"><?php echo esc_html( number_format( $total_pending ) ); ?></h3>
+            <p style="color:#666;margin:0"><?php esc_html_e( 'Pending Bookings', 'space-booking' ); ?></p>
+        </div>
+        <div class="sb-stat-card"
+            style="background:#fff;padding:20px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.1)">
+            <h3 style="margin:0 0 8px"><?php echo \SpaceBooking\Services\CurrencyService::format( $total_revenue ); ?>
+            </h3>
 
-					<p style="color:#666;margin:0"><?php esc_html_e( 'Total Revenue', 'space-booking' ); ?></p>
-				</div>
-			</div>
+            <p style="color:#666;margin:0"><?php esc_html_e( 'Total Revenue', 'space-booking' ); ?></p>
+        </div>
+    </div>
 
-			<h2><?php esc_html_e( 'Recent Bookings', 'space-booking' ); ?></h2>
-			<table class="wp-list-table widefat fixed striped">
-				<thead>
-					<tr>
-						<th><?php esc_html_e( 'ID', 'space-booking' ); ?></th>
-						<th><?php esc_html_e( 'Customer', 'space-booking' ); ?></th>
-						<th><?php esc_html_e( 'Space', 'space-booking' ); ?></th>
-						<th><?php esc_html_e( 'Date', 'space-booking' ); ?></th>
-						<th><?php esc_html_e( 'Time', 'space-booking' ); ?></th>
-						<th><?php esc_html_e( 'Total', 'space-booking' ); ?></th>
-						<th><?php esc_html_e( 'Status', 'space-booking' ); ?></th>
-					</tr>
-				</thead>
-				<tbody>
-					<?php if ( empty( $recent ) ) : ?>
-						<tr><td colspan="7"><?php esc_html_e( 'No bookings yet.', 'space-booking' ); ?></td></tr>
-					<?php else : ?>
-						<?php foreach ( $recent as $b ) : ?>
-							<tr>
-								<td><?php echo esc_html( $b['id'] ); ?></td>
-								<td><?php echo esc_html( $b['customer_name'] ); ?><br><small><?php echo esc_html( $b['customer_email'] ); ?></small></td>
-								<td><?php echo esc_html( $b['space_name'] ?? '—' ); ?></td>
-								<td><?php echo esc_html( $b['booking_date'] ); ?></td>
-								<td><?php echo esc_html( substr( $b['start_time'], 0, 5 ) . ' – ' . substr( $b['end_time'], 0, 5 ) ); ?></td>
-								<td>$<?php echo esc_html( number_format( (float) $b['total_price'], 2 ) ); ?></td>
-								<td><span class="sb-status sb-status--<?php echo esc_attr( $b['status'] ); ?>"><?php echo esc_html( ucfirst( $b['status'] ) ); ?></span></td>
-							</tr>
-						<?php endforeach; ?>
-					<?php endif; ?>
-				</tbody>
-			</table>
-		</div>
-		<?php
+    <h2><?php esc_html_e( 'Recent Bookings', 'space-booking' ); ?></h2>
+    <table class="wp-list-table widefat fixed striped">
+        <thead>
+            <tr>
+                <th><?php esc_html_e( 'ID', 'space-booking' ); ?></th>
+                <th><?php esc_html_e( 'Customer', 'space-booking' ); ?></th>
+                <th><?php esc_html_e( 'Space', 'space-booking' ); ?></th>
+                <th><?php esc_html_e( 'Date', 'space-booking' ); ?></th>
+                <th><?php esc_html_e( 'Time', 'space-booking' ); ?></th>
+                <th><?php esc_html_e( 'Total', 'space-booking' ); ?></th>
+                <th><?php esc_html_e( 'Status', 'space-booking' ); ?></th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php if ( empty( $recent ) ) : ?>
+            <tr>
+                <td colspan="7"><?php esc_html_e( 'No bookings yet.', 'space-booking' ); ?></td>
+            </tr>
+            <?php else : ?>
+            <?php foreach ( $recent as $b ) : ?>
+            <tr>
+                <td><?php echo esc_html( $b['id'] ); ?></td>
+                <td><?php echo esc_html( $b['customer_name'] ); ?><br><small><?php echo esc_html( $b['customer_email'] ); ?></small>
+                </td>
+                <td><?php echo esc_html( $b['space_name'] ?? '—' ); ?></td>
+                <td><?php echo esc_html( $b['booking_date'] ); ?></td>
+                <td><?php echo esc_html( substr( $b['start_time'], 0, 5 ) . ' – ' . substr( $b['end_time'], 0, 5 ) ); ?>
+                </td>
+                <td>$<?php echo esc_html( number_format( (float) $b['total_price'], 2 ) ); ?></td>
+                <td><span
+                        class="sb-status sb-status--<?php echo esc_attr( $b['status'] ); ?>"><?php echo esc_html( ucfirst( $b['status'] ) ); ?></span>
+                </td>
+            </tr>
+            <?php endforeach; ?>
+            <?php endif; ?>
+        </tbody>
+    </table>
+</div>
+<?php
 	}
 
 	public function page_bookings(): void {
 		?>
-		<div class="wrap">
-			<?php include __DIR__ . '/../../templates/admin/page-bookings.php'; ?>
-		</div>
-		<?php
+<div class="wrap">
+    <?php include __DIR__ . '/../../templates/admin/page-bookings.php'; ?>
+</div>
+<?php
 	}
 
 	public function page_pricing(): void {
 		?>
-		<div class="wrap">
-			<h1><?php esc_html_e( 'Pricing Rules', 'space-booking' ); ?></h1>
-			<p><?php esc_html_e( 'Pricing rules are stored in the database. Use the REST API or direct DB access to manage rules.', 'space-booking' ); ?></p>
-			<a href="<?php echo esc_url( admin_url( 'admin.php?page=space-booking-settings' ) ); ?>" class="button button-primary">
-				<?php esc_html_e( 'Go to Settings', 'space-booking' ); ?>
-			</a>
-		</div>
-		<?php
+<div class="wrap">
+    <h1><?php esc_html_e( 'Pricing Rules', 'space-booking' ); ?></h1>
+    <p><?php esc_html_e( 'Pricing rules are stored in the database. Use the REST API or direct DB access to manage rules.', 'space-booking' ); ?>
+    </p>
+    <a href="<?php echo esc_url( admin_url( 'admin.php?page=space-booking-settings' ) ); ?>"
+        class="button button-primary">
+        <?php esc_html_e( 'Go to Settings', 'space-booking' ); ?>
+    </a>
+</div>
+<?php
 	}
 
 	public function page_settings(): void {
 		?>
-		<div class="wrap">
-			<h1><?php esc_html_e( 'Space Booking Settings', 'space-booking' ); ?></h1>
-			<form method="post" action="options.php">
-				<?php settings_fields( 'space_booking_settings' ); ?>
-				<table class="form-table" role="presentation">
-					<?php $this->settings_row( 'sb_global_open_time',       __( 'Global Opening Time', 'space-booking' ), 'time' ); ?>
-					<?php $this->settings_row( 'sb_global_close_time',       __( 'Global Closing Time', 'space-booking' ), 'time' ); ?>
-					<?php $this->settings_row( 'sb_slot_interval_minutes',   __( 'Slot Interval (minutes)', 'space-booking' ), 'number' ); ?>
-<?php \SpaceBooking\Services\CurrencyService::render_select( 'sb_currency' ); ?><p class="description"><?php esc_html_e( 'Select your currency. Prices will be displayed with the appropriate symbol.', 'space-booking' ); ?></p>
-					<?php $this->settings_row( 'sb_stripe_publishable_key',  __( 'Stripe Publishable Key', 'space-booking' ), 'text' ); ?>
-					<?php $this->settings_row( 'sb_stripe_secret_key',       __( 'Stripe Secret Key', 'space-booking' ), 'password' ); ?>
-					<?php $this->settings_row( 'sb_stripe_webhook_secret',   __( 'Stripe Webhook Secret', 'space-booking' ), 'password' ); ?>
-					<?php $this->settings_row( 'sb_admin_email',             __( 'Admin Notification Email', 'space-booking' ), 'email' ); ?>
-					<?php $this->settings_row( 'sb_email_from_name',         __( 'Email From Name', 'space-booking' ), 'text' ); ?>
-					<?php $this->settings_row( 'sb_magic_link_ttl_minutes',  __( 'Magic Link TTL (minutes)', 'space-booking' ), 'number' ); ?>
-				</table>
-				<?php submit_button(); ?>
-			</form>
-		</div>
-		<?php
+<div class="wrap">
+    <h1><?php esc_html_e( 'Space Booking Settings', 'space-booking' ); ?></h1>
+    <form method="post" action="options.php">
+        <?php settings_fields( 'space_booking_settings' ); ?>
+        <table class="form-table" role="presentation">
+            <?php $this->settings_row( 'sb_global_open_time',       __( 'Global Opening Time', 'space-booking' ), 'time' ); ?>
+            <?php $this->settings_row( 'sb_global_close_time',       __( 'Global Closing Time', 'space-booking' ), 'time' ); ?>
+            <?php $this->settings_row( 'sb_slot_interval_minutes',   __( 'Slot Interval (minutes)', 'space-booking' ), 'number' ); ?>
+            <?php $this->settings_row( 'sb_buffer_pre_minutes', __( 'Global Pre-Event Buffer (minutes)', 'space-booking' ), 'number' ); ?>
+            <p class="description">
+                <?php esc_html_e( 'Minutes added before each booking start (cleanup/setup time). Blocks availability.', 'space-booking' ); ?>
+            </p>
+            <?php $this->settings_row( 'sb_buffer_post_minutes', __( 'Global Post-Event Buffer (minutes)', 'space-booking' ), 'number' ); ?>
+            <p class="description"><?php esc_html_e( 'Minutes added after each booking end.', 'space-booking' ); ?></p>
+            <?php \SpaceBooking\Services\CurrencyService::render_select( 'sb_currency' ); ?><p class="description">
+                <?php esc_html_e( 'Select your currency. Prices will be displayed with the appropriate symbol.', 'space-booking' ); ?>
+            </p>
+            <?php $this->settings_row( 'sb_stripe_publishable_key',  __( 'Stripe Publishable Key', 'space-booking' ), 'text' ); ?>
+            <?php $this->settings_row( 'sb_stripe_secret_key',       __( 'Stripe Secret Key', 'space-booking' ), 'password' ); ?>
+            <?php $this->settings_row( 'sb_stripe_webhook_secret',   __( 'Stripe Webhook Secret', 'space-booking' ), 'password' ); ?>
+            <?php $this->settings_row( 'sb_admin_email',             __( 'Admin Notification Email', 'space-booking' ), 'email' ); ?>
+            <?php $this->settings_row( 'sb_email_from_name',         __( 'Email From Name', 'space-booking' ), 'text' ); ?>
+            <?php $this->settings_row( 'sb_magic_link_ttl_minutes',  __( 'Magic Link TTL (minutes)', 'space-booking' ), 'number' ); ?>
+        </table>
+        <?php submit_button(); ?>
+    </form>
+</div>
+<?php
+	}
+
+	public function page_tools(): void {
+		?>
+<div class="wrap">
+    <h1><?php esc_html_e( 'Tools - Export/Import Data', 'space-booking' ); ?></h1>
+    <?php include SB_DIR . 'templates/admin/page-export-import.php'; ?>
+</div>
+<?php
 	}
 
 	private function settings_row( string $key, string $label, string $type ): void {

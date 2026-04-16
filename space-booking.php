@@ -5,7 +5,7 @@
  * Description:       Hourly space rental & shared asset booking plugin with Stripe payments.
  * Version:           1.0.0
  * Requires at least: 6.0
- * Requires PHP:      8.1
+ * Requires PHP:      8.0
  * Author:            Senior WP Architect
  * License:           GPL-2.0-or-later
  * Text Domain:       space-booking

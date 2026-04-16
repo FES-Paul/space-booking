@@ -52,138 +52,164 @@ final class SpaceMetaBox
 			6 => __('Saturday',  'space-booking'),
 		];
 ?>
-		<style>
-			.sb-meta-grid {
-				display: grid;
-				grid-template-columns: repeat(2, 1fr);
-				gap: 16px;
-			}
+<style>
+.sb-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+}
 
-			.sb-meta-field label {
-				display: block;
-				font-weight: 600;
-				margin-bottom: 4px;
-			}
+.sb-meta-field label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
 
-			.sb-meta-field input {
-				width: 100%;
-			}
+.sb-meta-field input {
+    width: 100%;
+}
 
-			.sb-day-row {
-				display: grid;
-				grid-template-columns: 100px 1fr 1fr 80px;
-				gap: 8px;
-				align-items: center;
-				padding: 6px 0;
-				border-bottom: 1px solid #eee;
-			}
-		</style>
-		<div class="sb-meta-grid">
-			<div class="sb-meta-field">
-				<?php $symbol = \SpaceBooking\Services\CurrencyService::get_symbol(); ?>
-				<label for="sb_hourly_rate"><?php printf( esc_html__('Hourly Rate (%s)', 'space-booking'), $symbol ); ?></label>
-				<input type="number" id="sb_hourly_rate" name="sb_hourly_rate" step="0.01" min="0"
-					value="<?php echo esc_attr($rate); ?>">
+.sb-day-row {
+    display: grid;
+    grid-template-columns: 100px 1fr 1fr 80px;
+    gap: 8px;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid #eee;
+}
+</style>
+<div class="sb-meta-grid">
+    <div class="sb-meta-field">
+        <?php $symbol = \SpaceBooking\Services\CurrencyService::get_symbol(); ?>
+        <label for="sb_hourly_rate"><?php printf( esc_html__('Hourly Rate (%s)', 'space-booking'), $symbol ); ?></label>
+        <input type="number" id="sb_hourly_rate" name="sb_hourly_rate" step="0.01" min="0"
+            value="<?php echo esc_attr($rate); ?>">
 
-			</div>
-			<div class="sb-meta-field">
-				<label for="sb_capacity"><?php esc_html_e('Capacity (guests)', 'space-booking'); ?></label>
-				<input type="number" id="sb_capacity" name="sb_capacity" min="0"
-					value="<?php echo esc_attr($capacity); ?>">
-			</div>
-			<div class="sb-meta-field">
-				<label for="sb_min_duration"><?php esc_html_e('Min Duration (hours)', 'space-booking'); ?></label>
-				<input type="number" id="sb_min_duration" name="sb_min_duration" min="1" max="24"
-					value="<?php echo esc_attr($min_dur); ?>">
-			</div>
-			<div class="sb-meta-field">
-				<label for="sb_max_duration"><?php esc_html_e('Max Duration (hours)', 'space-booking'); ?></label>
-				<input type="number" id="sb_max_duration" name="sb_max_duration" min="1" max="24"
-					value="<?php echo esc_attr($max_dur); ?>">
-			</div>
-		</div>
+    </div>
+    <div class="sb-meta-field">
+        <label for="sb_capacity"><?php esc_html_e('Capacity (guests)', 'space-booking'); ?></label>
+        <input type="number" id="sb_capacity" name="sb_capacity" min="0" value="<?php echo esc_attr($capacity); ?>">
+    </div>
+    <div class="sb-meta-field">
+        <label for="sb_min_duration"><?php esc_html_e('Min Duration (hours)', 'space-booking'); ?></label>
+        <input type="number" id="sb_min_duration" name="sb_min_duration" min="1" max="24"
+            value="<?php echo esc_attr($min_dur); ?>">
+    </div>
+    <div class="sb-meta-field">
+        <label for="sb_max_duration"><?php esc_html_e('Max Duration (hours)', 'space-booking'); ?></label>
+        <input type="number" id="sb_max_duration" name="sb_max_duration" min="1" max="24"
+            value="<?php echo esc_attr($max_dur); ?>">
+    </div>
+    <div class="sb-meta-field">
+        <label for="sb_buffer_pre"><?php esc_html_e('Pre-Event Buffer (minutes)', 'space-booking'); ?></label>
+        <input type="number" id="sb_buffer_pre" name="sb_buffer_pre" min="0"
+            value="<?php echo esc_attr( get_post_meta($post->ID, '_sb_buffer_pre_minutes', true ) ?: '' ); ?>">
+        <p class="description"><?php esc_html_e('Overrides global. 0 = use global.', 'space-booking'); ?></p>
+    </div>
+    <div class="sb-meta-field">
+        <label for="sb_buffer_post"><?php esc_html_e('Post-Event Buffer (minutes)', 'space-booking'); ?></label>
+        <input type="number" id="sb_buffer_post" name="sb_buffer_post" min="0"
+            value="<?php echo esc_attr( get_post_meta($post->ID, '_sb_buffer_post_minutes', true ) ?: '' ); ?>">
+        <p class="description"><?php esc_html_e('Overrides global. 0 = use global.', 'space-booking'); ?></p>
+    </div>
+</div>
 
-		<h4><?php esc_html_e('Day-specific Hour Overrides', 'space-booking'); ?></h4>
-		<p class="description"><?php esc_html_e('Leave blank to use global hours. Check "Closed" to mark as unavailable.', 'space-booking'); ?></p>
+<h4><?php esc_html_e('Day-specific Hour Overrides', 'space-booking'); ?></h4>
+<p class="description">
+    <?php esc_html_e('Leave blank to use global hours. Check "Closed" to mark as unavailable.', 'space-booking'); ?></p>
 
-		<div class="sb-day-row" style="font-weight:600">
-			<span><?php esc_html_e('Day', 'space-booking'); ?></span>
-			<span><?php esc_html_e('Open', 'space-booking'); ?></span>
-			<span><?php esc_html_e('Close', 'space-booking'); ?></span>
-			<span><?php esc_html_e('Closed', 'space-booking'); ?></span>
-		</div>
+<div class="sb-day-row" style="font-weight:600">
+    <span><?php esc_html_e('Day', 'space-booking'); ?></span>
+    <span><?php esc_html_e('Open', 'space-booking'); ?></span>
+    <span><?php esc_html_e('Close', 'space-booking'); ?></span>
+    <span><?php esc_html_e('Closed', 'space-booking'); ?></span>
+</div>
 
-		<?php foreach ($days as $num => $name) :
+<?php foreach ($days as $num => $name) :
 			$ov     = $overrides[$num] ?? [];
 			$open   = $ov['open']   ?? '';
 			$close  = $ov['close']  ?? '';
 			$closed = ! empty($ov['closed']);
 		?>
-			<div class="sb-day-row">
-				<span><?php echo esc_html($name); ?></span>
-				<input type="time" name="sb_day_overrides[<?php echo esc_attr($num); ?>][open]"
-					value="<?php echo esc_attr($open); ?>">
-				<input type="time" name="sb_day_overrides[<?php echo esc_attr($num); ?>][close]"
-					value="<?php echo esc_attr($close); ?>">
-				<input type="checkbox" name="sb_day_overrides[<?php echo esc_attr($num); ?>][closed]"
-					value="1" <?php checked($closed); ?>>
-			</div>
-		<?php endforeach; ?>
+<div class="sb-day-row">
+    <span><?php echo esc_html($name); ?></span>
+    <input type="time" name="sb_day_overrides[<?php echo esc_attr($num); ?>][open]"
+        value="<?php echo esc_attr($open); ?>">
+    <input type="time" name="sb_day_overrides[<?php echo esc_attr($num); ?>][close]"
+        value="<?php echo esc_attr($close); ?>">
+    <input type="checkbox" name="sb_day_overrides[<?php echo esc_attr($num); ?>][closed]" value="1"
+        <?php checked($closed); ?>>
+</div>
+<?php endforeach; ?>
 
-		<div>
-			<h4><?php esc_html_e('Price Overrides (specific dates/times)', 'space-booking'); ?></h4>
-			<p class="description"><?php esc_html_e('Set custom hourly rates for specific date/time ranges. Overlaps split pro-rata.', 'space-booking'); ?></p>
+<div>
+    <h4><?php esc_html_e('Price Overrides (specific dates/times)', 'space-booking'); ?></h4>
+    <p class="description">
+        <?php esc_html_e('Set custom hourly rates for specific date/time ranges. Overlaps split pro-rata.', 'space-booking'); ?>
+    </p>
 
-			<div id="sb-price-overrides">
-				<?php
+    <div id="sb-price-overrides">
+        <?php
 				$price_overrides = get_post_meta($post->ID, '_sb_price_overrides', true);
 				if (! is_array($price_overrides)) $price_overrides = [];	
 				foreach ($price_overrides as $i => $ov) :
 				?>
-					<div class="sb-override-row" style="display:grid;grid-template-columns:100px 120px 120px 100px 30px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #ddd;">
-						<?php foreach ([0=>__('Sun'),1=>__('Mon'),2=>__('Tue'),3=>__('Wed'),4=>__('Thu'),5=>__('Fri'),6=>__('Sat')] as $day_num => $day_name) : ?>
-						<label style="font-size:12px;"><input type="checkbox" name="sb_price_overrides[<?php echo $i; ?>][days][]" value="<?php echo $day_num; ?>" <?php checked( in_array($day_num, $ov['days'] ?? []) ); ?>><?php echo $day_name; ?></label>
-						<?php endforeach; ?>
-						<input type="time" name="sb_price_overrides[<?php echo $i; ?>][start_time]" value="<?php echo esc_attr($ov['start_time'] ?? ''); ?>" required>
-						<input type="time" name="sb_price_overrides[<?php echo $i; ?>][end_time]" value="<?php echo esc_attr($ov['end_time'] ?? ''); ?>" required>
-						<input type="number" name="sb_price_overrides[<?php echo $i; ?>][hourly_rate]" step="0.01" min="0" value="<?php echo esc_attr($ov['hourly_rate'] ?? ''); ?>" required style="width:100%;">
-						<button type="button" class="button-link sb-remove-override" style="color:#d63638;">×</button>
-					</div>
-				<?php endforeach; ?>
-			</div>
-			<button type="button" id="sb-add-override" class="button"><?php esc_html_e('Add Price Override', 'space-booking'); ?></button>
-		</div>
+        <div class="sb-override-row"
+            style="display:grid;grid-template-columns:100px 120px 120px 100px 30px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #ddd;">
+            <?php foreach ([0=>__('Sun'),1=>__('Mon'),2=>__('Tue'),3=>__('Wed'),4=>__('Thu'),5=>__('Fri'),6=>__('Sat')] as $day_num => $day_name) : ?>
+            <label style="font-size:12px;"><input type="checkbox" name="sb_price_overrides[<?php echo $i; ?>][days][]"
+                    value="<?php echo $day_num; ?>"
+                    <?php checked( in_array($day_num, $ov['days'] ?? []) ); ?>><?php echo $day_name; ?></label>
+            <?php endforeach; ?>
+            <input type="time" name="sb_price_overrides[<?php echo $i; ?>][start_time]"
+                value="<?php echo esc_attr($ov['start_time'] ?? ''); ?>" required>
+            <input type="time" name="sb_price_overrides[<?php echo $i; ?>][end_time]"
+                value="<?php echo esc_attr($ov['end_time'] ?? ''); ?>" required>
+            <input type="number" name="sb_price_overrides[<?php echo $i; ?>][hourly_rate]" step="0.01" min="0"
+                value="<?php echo esc_attr($ov['hourly_rate'] ?? ''); ?>" required style="width:100%;">
+            <button type="button" class="button-link sb-remove-override" style="color:#d63638;">×</button>
+        </div>
+        <?php endforeach; ?>
+    </div>
+    <button type="button" id="sb-add-override"
+        class="button"><?php esc_html_e('Add Price Override', 'space-booking'); ?></button>
+</div>
 
 
-	</div>
+</div>
 
-		<script>
-			jQuery(document).ready(function($) {
-				let overrideIndex = <?php echo count($price_overrides); ?>;
-				const dayLabels = <?php 
+<script>
+jQuery(document).ready(function($) {
+    let overrideIndex = <?php echo count($price_overrides); ?>;
+    const dayLabels = <?php 
 					$day_short = [0=>'Sun',1=>'Mon',2=>'Tue',3=>'Wed',4=>'Thu',5=>'Fri',6=>'Sat'];
 					echo json_encode($day_short);
 				?>;
-				$('#sb-add-override').click(function() {
-					let checkboxes = '';
-					for(let d=0; d<7; d++) {
-						checkboxes += '<label style="font-size:11px;white-space:nowrap;display:inline-block;margin-right:2px;"><input type="checkbox" name="sb_price_overrides[' + overrideIndex + '][days][]" value="' + d + '">' + dayLabels[d] + '</label>';
-					}
-					const row = '<div class="sb-override-row" style="display:grid;grid-template-columns:repeat(7,1fr) 120px 120px 100px 30px;gap:2px;align-items:center;padding:8px 0;border-bottom:1px solid #ddd;">' +
-						checkboxes +
-						'<input type="time" name="sb_price_overrides[' + overrideIndex + '][start_time]" required>' +
-						'<input type="time" name="sb_price_overrides[' + overrideIndex + '][end_time]" required>' +
-						'<input type="number" name="sb_price_overrides[' + overrideIndex + '][hourly_rate]" step="0.01" min="0" required style="width:100%;">' +
-						'<button type="button" class="button-link sb-remove-override" style="color:#d63638;">×</button>' +
-						'</div>';
-					$('#sb-price-overrides').append(row);
-					overrideIndex++;
-				});
-				$(document).on('click', '.sb-remove-override', function() {
-					$(this).closest('.sb-override-row').remove();
-				});
-			});
-		</script>
+    $('#sb-add-override').click(function() {
+        let checkboxes = '';
+        for (let d = 0; d < 7; d++) {
+            checkboxes +=
+                '<label style="font-size:11px;white-space:nowrap;display:inline-block;margin-right:2px;"><input type="checkbox" name="sb_price_overrides[' +
+                overrideIndex + '][days][]" value="' + d + '">' + dayLabels[d] + '</label>';
+        }
+        const row =
+            '<div class="sb-override-row" style="display:grid;grid-template-columns:repeat(7,1fr) 120px 120px 100px 30px;gap:2px;align-items:center;padding:8px 0;border-bottom:1px solid #ddd;">' +
+            checkboxes +
+            '<input type="time" name="sb_price_overrides[' + overrideIndex +
+            '][start_time]" required>' +
+            '<input type="time" name="sb_price_overrides[' + overrideIndex + '][end_time]" required>' +
+            '<input type="number" name="sb_price_overrides[' + overrideIndex +
+            '][hourly_rate]" step="0.01" min="0" required style="width:100%;">' +
+            '<button type="button" class="button-link sb-remove-override" style="color:#d63638;">×</button>' +
+            '</div>';
+        $('#sb-price-overrides').append(row);
+        overrideIndex++;
+    });
+    $(document).on('click', '.sb-remove-override', function() {
+        $(this).closest('.sb-override-row').remove();
+    });
+});
+</script>
 <?php
 	}
 
@@ -202,6 +228,8 @@ final class SpaceMetaBox
 		update_post_meta($post_id, '_sb_min_duration', (int)   ($_POST['sb_min_duration'] ?? 1));
 		update_post_meta($post_id, '_sb_max_duration', (int)   ($_POST['sb_max_duration'] ?? 8));
 		update_post_meta($post_id, '_sb_capacity',     (int)   ($_POST['sb_capacity']     ?? 0));
+		update_post_meta($post_id, '_sb_buffer_pre_minutes',  (int) ($_POST['sb_buffer_pre']  ?? 0));
+		update_post_meta($post_id, '_sb_buffer_post_minutes', (int) ($_POST['sb_buffer_post'] ?? 0));
 
 		// Day overrides
 		$raw_overrides = $_POST['sb_day_overrides'] ?? [];
