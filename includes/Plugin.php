@@ -1,24 +1,21 @@
-<?php
-
-declare(strict_types=1);
+<?php declare(strict_types=1);
 
 namespace SpaceBooking;
 
-use SpaceBooking\CPT\SpaceCPT;
-use SpaceBooking\CPT\ExtraCPT;
-use SpaceBooking\CPT\PackageCPT;
 use SpaceBooking\Controllers\AvailabilityController;
 use SpaceBooking\Controllers\BookingController;
 use SpaceBooking\Controllers\CustomerController;
 use SpaceBooking\Controllers\SpaceController;
 use SpaceBooking\Controllers\WebhookController;
+use SpaceBooking\CPT\ExtraCPT;
+use SpaceBooking\CPT\PackageCPT;
+use SpaceBooking\CPT\SpaceCPT;
 
 /**
  * Main plugin singleton – boots all subsystems.
  */
 final class Plugin
 {
-
 	private static ?self $instance = null;
 
 	public static function instance(): self
@@ -81,15 +78,13 @@ final class Plugin
 	{
 		global $post;
 		// Only load on pages containing our shortcode
-		if (! is_a($post, 'WP_Post')) {
+		if (!is_a($post, 'WP_Post')) {
 			return;
 		}
 
-
 		if (has_shortcode($post->post_content, 'space_booking')) {
-
 			$asset_file = SB_DIR . 'assets/js/booking-app.asset.php';
-			$asset      = file_exists($asset_file)
+			$asset = file_exists($asset_file)
 				? require $asset_file
 				: ['dependencies' => [], 'version' => SB_VERSION];
 
@@ -112,13 +107,12 @@ final class Plugin
 				'space-booking-app',
 				'sbConfig',
 				[
-					'apiBase'    => rest_url('space-booking/v1'),
-					'nonce'      => wp_create_nonce('wp_rest'),
-					'stripeKey'  => get_option('sb_stripe_publishable_key', ''),
-					'currency'   => get_option('sb_currency', 'USD'),
-					'symbol'     => \SpaceBooking\Services\CurrencyService::get_symbol(),
+					'apiBase' => rest_url('space-booking/v1'),
+					'nonce' => wp_create_nonce('wp_rest'),
+					'stripeKey' => get_option('sb_stripe_publishable_key', ''),
+					'currency' => get_option('sb_currency', 'USD'),
+					'symbol' => \SpaceBooking\Services\CurrencyService::get_symbol(),
 					'dateFormat' => get_option('date_format', 'Y-m-d'),
-
 				]
 			);
 
@@ -138,14 +132,11 @@ final class Plugin
 			);
 		}
 
-
 		if (has_shortcode($post->post_content, 'space_booking_lookup')) {
-
 			$asset_file = SB_DIR . 'assets/js/lookup-app.asset.php';
-			$asset 	= file_exists($asset_file)
+			$asset = file_exists($asset_file)
 				? require $asset_file
 				: ['dependencies' => [], 'version' => SB_VERSION];
-
 
 			wp_enqueue_style(
 				'sb-lookup-app',
@@ -166,12 +157,11 @@ final class Plugin
 				'sb-lookup-app',
 				'sbConfig',
 				[
-					'apiBase'    => rest_url('space-booking/v1'),
-					'nonce'      => wp_create_nonce('wp_rest'),
+					'apiBase' => rest_url('space-booking/v1'),
+					'nonce' => wp_create_nonce('wp_rest'),
 					'dateFormat' => get_option('date_format', 'Y-m-d'),
 				]
 			);
-
 
 			add_filter(
 				'script_loader_tag',
@@ -200,7 +190,7 @@ final class Plugin
 	public function render_booking_app(array $atts): string
 	{
 		$atts = shortcode_atts([
-			'space_id'   => '',
+			'space_id' => '',
 			'package_id' => '',
 		], $atts, 'space_booking');
 
@@ -223,7 +213,7 @@ final class Plugin
 	// ── Admin ────────────────────────────────────────────────────────────────
 	private function register_admin(): void
 	{
-		if (! is_admin()) {
+		if (!is_admin()) {
 			return;
 		}
 		(new Admin\AdminMenu())->register();
@@ -236,7 +226,8 @@ final class Plugin
 		add_action('wp_ajax_sb_import_data', [$this, 'ajax_import_data']);
 	}
 
-	public function ajax_export_data(): void {
+	public function ajax_export_data(): void
+	{
 		check_ajax_referer('sb_export_import', '_wpnonce');
 
 		if (!current_user_can('manage_options')) {
@@ -253,19 +244,34 @@ final class Plugin
 		wp_die();
 	}
 
-	public function ajax_import_data(): void {
+	public function ajax_import_data(): void
+	{
 		check_ajax_referer('sb_export_import', '_wpnonce');
 
 		if (!current_user_can('manage_options')) {
 			wp_send_json_error('Unauthorized');
 		}
 
-		if (empty($_FILES['json_file']['tmp_name'])) {
-			wp_send_json_error('No file uploaded');
+		$file = $_FILES['json_file'];
+		if ($file['error'] !== UPLOAD_ERR_OK) {
+			$errors = [
+				UPLOAD_ERR_INI_SIZE => 'File too large (upload_max_filesize)',
+				UPLOAD_ERR_FORM_SIZE => 'File exceeds MAX_FILE_SIZE',
+				UPLOAD_ERR_PARTIAL => 'Partial upload',
+				UPLOAD_ERR_NO_FILE => 'No file',
+				UPLOAD_ERR_NO_TMP_DIR => 'Missing temp folder',
+				UPLOAD_ERR_CANT_WRITE => 'Disk failure',
+				UPLOAD_ERR_EXTENSION => 'Upload stopped by extension',
+			];
+			wp_send_json_error($errors[$file['error']] ?? 'Unknown upload error: ' . $file['error']);
+		}
+
+		if (empty($file['tmp_name']) || !file_exists($file['tmp_name'])) {
+			wp_send_json_error('Upload failed: temp file missing (' . esc_js($file['tmp_name']) . ')');
 		}
 
 		$service = new \SpaceBooking\Services\ExportImportService();
-		$result = $service->import_json($_FILES['json_file']['tmp_name'], !empty($_POST['delete_existing']));
+		$result = $service->import_json($file['tmp_name'], !empty($_POST['delete_existing']));
 
 		if ($result[0]) {
 			wp_send_json_success($result[1]);

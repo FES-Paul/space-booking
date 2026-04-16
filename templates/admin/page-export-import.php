@@ -22,7 +22,7 @@
         <p class="description">
             <?php esc_html_e('WARNING: This will permanently delete all Spaces/Packages/Extras.', 'space-booking'); ?>
         </p>
-        <button type="submit" class="button button-secondary"
+        <button type="submit" id="sb-import-btn" class="button button-primary"
             disabled><?php esc_html_e('Import JSON', 'space-booking'); ?></button>
     </form>
     <div id="sb-import-status"></div>
@@ -51,11 +51,15 @@
 <script>
 jQuery(document).ready(function($) {
     const nonce = '<?php echo wp_create_nonce('sb_export_import'); ?>';
-    const ajaxUrl = ajaxurl + '?action=sb_export_data';
+
+    // Enable import button when file selected
+    $('#sb-import-file').on('change', function() {
+        $('#sb-import-btn').prop('disabled', !this.files.length);
+    });
 
     $('#sb-export-btn').click(function() {
         const link = document.createElement('a');
-        link.href = ajaxUrl + '&_wpnonce=' + nonce;
+        link.href = ajaxurl + '?action=sb_export_data&_wpnonce=' + nonce;
         link.download = 'space-booking-data.json';
         link.click();
     });
@@ -76,19 +80,23 @@ jQuery(document).ready(function($) {
             processData: false,
             contentType: false,
             success: function(res) {
+                console.log('AJAX response:', res); // Debug
+
                 if (res.success) {
-                    $('#sb-import-status').addClass('sb-success').html('✓ ' + res.data
-                        .message);
+                    $('#sb-import-status').addClass('sb-success').html('✓ ' + (res.data
+                        .message || res.data));
                     $('#sb-import-form')[0].reset();
+                    $('#sb-import-btn').prop('disabled', true);
                 } else {
-                    $('#sb-import-status').addClass('sb-error').html('✗ ' + res.data);
+                    $('#sb-import-status').addClass('sb-error').html('✗ ' + (res.data
+                        .message || res.data));
                 }
             },
             error: function() {
                 $('#sb-import-status').addClass('sb-error').html('Request failed.');
             },
             complete: function() {
-                $('#sb-import-btn').prop('disabled', false).text('Import JSON');
+                $('#sb-import-btn').prop('disabled', true).text('Import JSON');
             }
         });
     });
