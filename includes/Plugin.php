@@ -33,6 +33,7 @@ final class Plugin
 		$this->load_textdomain();
 		$this->register_cpts();
 		$this->register_rest_api();
+		$this->register_wc_hooks();
 		$this->enqueue_assets();
 		$this->register_shortcodes();
 		$this->register_admin();
@@ -64,7 +65,16 @@ final class Plugin
 			(new AvailabilityController())->register_routes();
 			(new BookingController())->register_routes();
 			(new CustomerController())->register_routes();
-			(new WebhookController())->register_routes();
+			// (new WebhookController())->register_routes(); // Disabled for WooCommerce
+		});
+	}
+
+	private function register_wc_hooks(): void
+	{
+		add_action('plugins_loaded', static function (): void {
+			if (class_exists('WooCommerce')) {
+				\SpaceBooking\Integrations\WooCommerceIntegration::init();
+			}
 		});
 	}
 
@@ -109,7 +119,6 @@ final class Plugin
 				[
 					'apiBase' => rest_url('space-booking/v1'),
 					'nonce' => wp_create_nonce('wp_rest'),
-					'stripeKey' => get_option('sb_stripe_publishable_key', ''),
 					'currency' => get_option('sb_currency', 'USD'),
 					'symbol' => \SpaceBooking\Services\CurrencyService::get_symbol(),
 					'dateFormat' => get_option('date_format', 'Y-m-d'),

@@ -1,25 +1,31 @@
-<?php
-declare(strict_types=1);
+<?php declare(strict_types=1);
 
 namespace SpaceBooking;
 
 /**
  * Handles plugin activation / deactivation / DB schema creation.
  */
-final class Installer {
-
-	public static function activate(): void {
+final class Installer
+{
+	public static function activate(): void
+	{
+		if (!class_exists('WooCommerce')) {
+			deactivate_plugins(SB_FILE);
+			wp_die('Space Booking requires WooCommerce to be installed and activated first.');
+		}
 		self::create_tables();
 		self::set_default_options();
 		flush_rewrite_rules();
 	}
 
-	public static function deactivate(): void {
+	public static function deactivate(): void
+	{
 		flush_rewrite_rules();
 	}
 
 	// ── Schema ───────────────────────────────────────────────────────────────
-	private static function create_tables(): void {
+	private static function create_tables(): void
+	{
 		global $wpdb;
 		$charset = $wpdb->get_charset_collate();
 
@@ -89,27 +95,28 @@ final class Installer {
 		) $charset;";
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
-		dbDelta( $sql_bookings );
-		dbDelta( $sql_extras );
-		dbDelta( $sql_pricing );
+		dbDelta($sql_bookings);
+		dbDelta($sql_extras);
+		dbDelta($sql_pricing);
 
-		update_option( 'sb_db_version', SB_VERSION );
+		update_option('sb_db_version', SB_VERSION);
 	}
 
 	// ── Default options ──────────────────────────────────────────────────────
-	private static function set_default_options(): void {
-		add_option( 'sb_global_open_time',         '09:00' );
-		add_option( 'sb_global_close_time',        '22:00' );
-		add_option( 'sb_slot_interval_minutes',    '60' );
-		add_option( 'sb_currency',                 'usd' );
-		add_option( 'sb_stripe_publishable_key',   '' );
-		add_option( 'sb_stripe_secret_key',        '' );
-		add_option( 'sb_stripe_webhook_secret',    '' );
-		add_option( 'sb_admin_email',              get_option( 'admin_email' ) );
-		add_option( 'sb_email_from_name',          get_option( 'blogname' ) );
-		add_option( 'sb_magic_link_ttl_minutes',   '30' );
-		add_option( 'sb_buffer_pre_minutes',   15 );
-		add_option( 'sb_buffer_post_minutes',  15 );
-		add_option( 'sb_booking_confirmation_tpl',  '' );
+	private static function set_default_options(): void
+	{
+		add_option('sb_global_open_time', '09:00');
+		add_option('sb_global_close_time', '22:00');
+		add_option('sb_slot_interval_minutes', '60');
+		add_option('sb_currency', 'usd');
+		add_option('sb_stripe_publishable_key', '');
+		add_option('sb_stripe_secret_key', '');
+		add_option('sb_stripe_webhook_secret', '');
+		add_option('sb_admin_email', get_option('admin_email'));
+		add_option('sb_email_from_name', get_option('blogname'));
+		add_option('sb_magic_link_ttl_minutes', '30');
+		add_option('sb_buffer_pre_minutes', 15);
+		add_option('sb_buffer_post_minutes', 15);
+		add_option('sb_booking_confirmation_tpl', '');
 	}
 }

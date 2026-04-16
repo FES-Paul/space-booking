@@ -127,7 +127,7 @@ final class AvailabilityService
 		$slots = [];
 		$cursor = new DateTime("1970-01-01 {$open}");
 		$end = new DateTime("1970-01-01 {$close}");
-		$step = new DateInterval("PT{$step_mins}M");
+		$step = new DateInterval('PT' . $step_mins . 'M');
 
 		while (true) {
 			$slot_end = (clone $cursor)->add($step);
@@ -147,10 +147,11 @@ final class AvailabilityService
 	private function add_minutes(string $time_str, int $minutes): string
 	{
 		$dt = new DateTime("1970-01-01 {$time_str}");
+		$interval_str = 'PT' . abs($minutes) . 'M';
 		if ($minutes < 0) {
-			$dt->sub(new DateInterval('PT' . abs($minutes) . 'M'));
+			$dt->sub(new DateInterval($interval_str));
 		} else {
-			$dt->add(new DateInterval("PT{$minutes}M"));
+			$dt->add(new DateInterval($interval_str));
 		}
 		$hours = (int) $dt->format('H');
 		$mins = (int) $dt->format('i');

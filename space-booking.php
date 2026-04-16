@@ -3,7 +3,8 @@
 /**
  * Plugin Name:       Space Booking
  * Plugin URI:        https://example.com/space-booking
- * Description:       Hourly space rental & shared asset booking plugin with Stripe payments.
+ * Description:       Hourly space rental & shared asset booking plugin with WooCommerce payments.
+ * Requires Plugins:   woocommerce
  * Version:           1.0.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
@@ -26,16 +27,17 @@ define('SB_URL', plugin_dir_url(__FILE__));
 define('SB_ASSETS_URL', SB_URL . 'assets/');
 define('SB_PLUGIN_SLUG', 'space-booking');
 
-require 'plugin-update-checker/plugin-update-checker.php';
-
-use YahnisElsts\PluginUpdateChecker\v5\PucFactory;
-
-$myUpdateChecker = PucFactory::buildUpdateChecker(
-	'https://github.com/xzud/space-booking/',
-	__FILE__,
-	'space-booking'
-);
-$myUpdateChecker->setBranch('main');
+if (file_exists(SB_DIR . 'plugin-update-checker/plugin-update-checker.php')) {
+	require SB_DIR . 'plugin-update-checker/plugin-update-checker.php';
+	if (class_exists('YahnisElsts\PluginUpdateChecker\v5\PucFactory')) {
+		$myUpdateChecker = \YahnisElsts\PluginUpdateChecker\v5\PucFactory::buildUpdateChecker(
+			'https://github.com/xzud/space-booking/',
+			__FILE__,
+			'space-booking'
+		);
+		$myUpdateChecker->setBranch('main');
+	}
+}
 
 // ── Autoloader ───────────────────────────────────────────────────────────────
 spl_autoload_register(static function (string $class): void {
