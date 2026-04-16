@@ -325,18 +325,20 @@ final class PricingService
 			return [];
 
 		usort($segments, fn($a, $b) => $a['start_min'] <=> $b['start_min']);
-		$merged = [$segments[0]];
 
-		foreach ($segments as $seg) {
+		$merged = [$segments[0]];
+		foreach ($segments as $curr) {
 			$last = &$merged[count($merged) - 1];
-			if ($last['end_min'] === $seg['start_min'] && $last['rate'] === $seg['rate']) {
-				$last['end_min'] = $seg['end_min'];
-				$last['end_time'] = $seg['end_time'];
+
+			// Merge if overlapping/adjacent OR duplicate AND same rate
+			if ($last['rate'] === $curr['rate'] &&
+					($last['end_min'] >= $curr['start_min'])) {
+				$last['end_min'] = max($last['end_min'], $curr['end_min']);
+				$last['end_time'] = $this->minutes_to_time($last['end_min']);
 			} else {
-				$merged[] = $seg;
+				$merged[] = $curr;
 			}
 		}
-
 		return $merged;
 	}
 
