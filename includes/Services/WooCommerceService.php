@@ -29,7 +29,7 @@ final class WooCommerceService
             throw new \RuntimeException('WooCommerce cart not available.');
         }
 
-        error_log('SpaceBooking WC: Creating product for booking #' . $booking_id);
+        error_log('SpaceBooking WC: Creating product for booking #' . $booking_id . ', cart available');
 
         // Create virtual product on-the-fly
         $product = new WC_Product_Simple();
@@ -38,8 +38,10 @@ final class WooCommerceService
         $product->set_status('publish');
         $product->set_catalog_visibility('hidden');
         $product->set_virtual(true);
-        $product->set_manage_stock(false);
+        $product->set_manage_stock(true);
+        $product->set_stock_quantity(1);
         $product->set_stock_status('instock');
+        $product->set_sold_individually(true);
         $product->set_catalog_visibility('catalog');
         $product->set_regular_price($total_price);
         $product->set_description('Space booking service - #' . $booking_id);

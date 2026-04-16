@@ -27,7 +27,7 @@ final class WooCommerceIntegration
     {
         error_log('SpaceBooking: Template Redirect Heartbeat - URL: ' . $_SERVER['REQUEST_URI']);
 
-        if (!is_cart() && !is_checkout()) {
+        if (!is_cart() && !is_checkout() && !is_account_page()) {
             return;
         }
 
@@ -36,30 +36,74 @@ final class WooCommerceIntegration
         }
 
         error_log('SpaceBooking WC populate_pending_cart triggered on ' . (is_cart() ? 'cart' : 'checkout'));
-        $pending = WC()->session->get('sb_pending_booking');
-        if (!$pending || !isset($pending['booking_id'])) {
-            error_log('SpaceBooking WC no pending booking in session');
+        // Check for pending via booking ID link (fixes guest session mismatch)
+        // Try session first
+        $pending_id = WC()->session->get('sb_pending_booking_id');
+
+        if (!$pending_id) {
+            // Fallback: scan recent transients
+            error_log('SpaceBooking WC no session ID, scanning transients...');
+            $transients = get_transient('sb_pending_checkout_list');
+            if (!$transients) {
+                $all_transients = [];
+                global $wpdb;
+                $results = $wpdb->get_results("
+                    SELECT option_name, option_value 
+                    FROM {$wpdb->options} 
+                    WHERE option_name LIKE '_transient_sb_pending_checkout_%' 
+                    AND option_value != ''
+                    ORDER BY option_id DESC 
+                    LIMIT 5
+                ");
+                foreach ($results as $row) {
+                    $id = str_replace('_transient_sb_pending_checkout_', '', $row->option_name);
+                    if (is_numeric($id)) {
+                        $all_transients[] = (int) $id;
+                    }
+                }
+                $transients = $all_transients;
+            }
+
+            foreach ($transients as $possible_id) {
+                $pending = get_transient('sb_pending_checkout_' . $possible_id);
+                if ($pending) {
+                    $pending_id = $possible_id;
+                    error_log('SpaceBooking WC found pending transient fallback ID: ' . $pending_id);
+                    break;
+                }
+            }
+        }
+
+        if (!$pending_id) {
+            error_log('SpaceBooking WC no pending booking found (session or transient)');
             return;
         }
 
-        error_log('SpaceBooking WC populating pending booking #' . $pending['booking_id']);
-        error_log('REST Session ID: ' . WC()->session->get_customer_id());  // For comparison
+        $pending = get_transient('sb_pending_checkout_' . $pending_id);
+        if (!$pending) {
+            error_log('SpaceBooking WC no pending data in transient for #' . $pending_id);
+            WC()->session?->set('sb_pending_booking_id', null);
+            return;
+        }
+
+        error_log('SpaceBooking WC populating pending booking #' . $pending_id . ' from transient');
 
         $wc = new \SpaceBooking\Services\WooCommerceService();
         try {
             $wc->add_booking_to_cart(
                 $pending['booking_data'],
                 $pending['total_price'],
-                $pending['booking_id']
+                $pending_id
             );
-            error_log('SpaceBooking WC populate success for #' . $pending['booking_id']);
+            error_log('SpaceBooking WC populate success for #' . $pending_id);
         } catch (Exception $e) {
-            error_log('SpaceBooking WC populate failed: ' . $e->getMessage());
+            error_log('SpaceBooking WC populate failed for #' . $pending_id . ': ' . $e->getMessage());
         }
 
-        // Clear session
-        WC()->session->set('sb_pending_booking', null);
-        error_log('SpaceBooking WC pending cleared');
+        // Clear transient and session
+        delete_transient('sb_pending_checkout_' . $pending_id);
+        WC()->session->set('sb_pending_booking_id', null);
+        error_log('SpaceBooking WC pending cleared (transient + session)');
     }
 
     /**

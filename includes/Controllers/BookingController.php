@@ -139,32 +139,28 @@ final class BookingController extends WP_REST_Controller
 			error_log('SpaceBooking: Booking #' . $booking_id . ' added to cart directly');
 		} catch (\RuntimeException $e) {
 			error_log('SpaceBooking: Direct cart add failed for #' . $booking_id . ': ' . $e->getMessage());
-			// Fallback: Store in session for checkout page
-			if (function_exists('WC')) {
-				if (!WC()->session) {
-					wc_load_cart();
-				}
-				error_log('REST Session ID: ' . WC()->session->get_customer_id());
-				WC()->session->set('sb_pending_booking', [
-					'booking_id' => $booking_id,
-					'booking_data' => [
-						'space_id' => $space_id,
-						'package_id' => $package_id,
-						'date' => $date,
-						'start_time' => $start_time,
-						'end_time' => $end_time,
-						'customer_name' => $name,
-						'customer_email' => $email,
-						'extras' => $extras,
-						'breakdown' => $price['breakdown'],
-					],
-					'total_price' => $price['total_price'],
-				]);
-				error_log('SpaceBooking: Booking #' . $booking_id . ' stored in WC session for pending cart');
-			} else {
-				error_log('SpaceBooking: WC not available for session');
-			}
+			// Fallback: Use transient + session link for checkout page
+			$pending_data = [
+				'booking_data' => [
+					'space_id' => $space_id,
+					'package_id' => $package_id,
+					'date' => $date,
+					'start_time' => $start_time,
+					'end_time' => $end_time,
+					'customer_name' => $name,
+					'customer_email' => $email,
+					'extras' => $extras,
+					'breakdown' => $price['breakdown'],
+				],
+				'total_price' => $price['total_price'],
+			];
+			set_transient('sb_pending_checkout_' . $booking_id, $pending_data, 1800);  // 30 min
+			error_log('SpaceBooking: Booking #' . $booking_id . ' stored in transient (session unavailable in REST)');
+			// Session set removed - using transient fallback in populate_pending_cart()
 		}
+
+		// Always redirect to checkout, not cart
+		$checkout_url = wc_get_checkout_url();
 
 		error_log('SpaceBooking: Booking #' . $booking_id . ' → checkout_url: ' . $checkout_url . ' (cart_direct: ' . json_encode($cart_added) . ')');
 
