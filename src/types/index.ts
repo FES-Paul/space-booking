@@ -41,6 +41,7 @@ export interface Extra {
   booked_qty: number;
   available_qty: number;
   is_available: boolean;
+  unavailable_reason: "sold_out" | "space_override" | null;
   thumbnail: string | null;
 }
 
@@ -89,7 +90,7 @@ export interface CustomerBooking {
   end_time: string;
   duration_hours: number;
   total_price: number;
-  status: 'pending' | 'confirmed' | 'cancelled' | 'refunded';
+  status: "pending" | "confirmed" | "cancelled" | "refunded";
   customer_name: string;
   customer_email: string;
   extras: Array<{ extra_name: string; quantity: number; unit_price: number }>;

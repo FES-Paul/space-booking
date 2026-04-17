@@ -107,9 +107,17 @@ export function Step3Addons() {
                     {window.sbConfig.symbol}
                     {extra.price.toFixed(2)}
                   </span>
-                  {!extra.is_available && (
-                    <span className="sb-badge sb-badge--sold-out">
-                      Sold Out
+                  {!extra.is_available && extra.unavailable_reason && (
+                    <span
+                      className={`sb-badge sb-badge--sold-out ${
+                        extra.unavailable_reason === "space_override"
+                          ? "sb-badge--closed"
+                          : ""
+                      }`}
+                    >
+                      {extra.unavailable_reason === "space_override"
+                        ? "Closed this time"
+                        : "Sold Out"}
                     </span>
                   )}
                   {extra.is_available && extra.available_qty < 3 && (
