@@ -1,13 +1,14 @@
-import React from 'react';
-import type { BookingStep } from '@/types';
+import React from "react";
+import type { BookingStep } from "@/types";
 
 const STEPS: { label: string }[] = [
-  { label: 'Select' },
-  { label: 'Schedule' },
-  { label: 'Add-ons' },
-  { label: 'Details' },
-  { label: 'Payment' },
-  { label: 'Confirm' },
+  { label: "Select" },
+  { label: "Schedule" },
+  { label: "Add-ons" },
+  { label: "Details" },
+  { label: "Terms" },
+  { label: "Payment" },
+  { label: "Confirm" },
 ];
 
 interface Props {
@@ -19,19 +20,22 @@ export function StepProgress({ currentStep }: Props) {
     <nav className="sb-progress" aria-label="Booking steps">
       <ol className="sb-progress__list">
         {STEPS.map((step, index) => {
-          const num    = (index + 1) as BookingStep;
+          const num = (index + 1) as BookingStep;
           const status =
-            num < currentStep ? 'completed' :
-            num === currentStep ? 'active' : 'upcoming';
+            num < currentStep
+              ? "completed"
+              : num === currentStep
+                ? "active"
+                : "upcoming";
 
           return (
             <li
               key={num}
               className={`sb-progress__item sb-progress__item--${status}`}
-              aria-current={status === 'active' ? 'step' : undefined}
+              aria-current={status === "active" ? "step" : undefined}
             >
               <span className="sb-progress__dot" aria-hidden="true">
-                {status === 'completed' ? '✓' : num}
+                {status === "completed" ? "✓" : num}
               </span>
               <span className="sb-progress__label">{step.label}</span>
             </li>

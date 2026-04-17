@@ -119,6 +119,7 @@ final class Plugin
 					'currency' => get_option('sb_currency', 'USD'),
 					'symbol' => \SpaceBooking\Services\CurrencyService::get_symbol(),
 					'dateFormat' => get_option('date_format', 'Y-m-d'),
+					'bookingPolicy' => get_option('sb_booking_policy', ''),
 				]
 			);
 

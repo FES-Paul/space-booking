@@ -10,6 +10,7 @@ import type {
 } from "@/types";
 
 interface BookingState {
+  bookingPolicy: string;
   // ── Navigation ───────────────────────────────────────────────────────────
   currentStep: BookingStep;
 
@@ -71,6 +72,7 @@ const DEFAULT_CUSTOMER: CustomerInfo = {
 export const useBookingStore = create<BookingState>((set, get) => ({
   // ── Initial state ────────────────────────────────────────────────────────
   currentStep: 1,
+  bookingPolicy: "",
   selectedSpace: null,
   selectedPackage: null,
   selectedDate: "",
@@ -89,7 +91,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
   setStep: (step) => set({ currentStep: step }),
   nextStep: () =>
     set((s) => ({
-      currentStep: Math.min(s.currentStep + 1, 6) as BookingStep,
+      currentStep: Math.min(s.currentStep + 1, 7) as BookingStep,
     })),
   prevStep: () =>
     set((s) => ({
@@ -143,9 +145,12 @@ export const useBookingStore = create<BookingState>((set, get) => ({
   confirmBooking: () => set({ isConfirmed: true }),
 
   // ── Reset ────────────────────────────────────────────────────────────────
+  setBookingPolicy: (policy: string) => set({ bookingPolicy: policy }),
+
   reset: () =>
     set({
       currentStep: 1,
+      bookingPolicy: "",
       selectedSpace: null,
       selectedPackage: null,
       selectedDate: "",

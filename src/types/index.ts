@@ -75,7 +75,7 @@ export interface PricingResponse {
 
 export interface BookingCreateResponse {
   booking_id: number;
-  client_secret: string;
+  checkout_url: string;
   total_price: number;
   breakdown: PriceBreakdownItem[];
 }
@@ -107,6 +107,7 @@ declare global {
       currency: string;
       symbol: string;
       dateFormat: string;
+      bookingPolicy: string;
     };
   }
 }
@@ -120,7 +121,7 @@ export interface SelectedExtra {
 
 // ── Booking wizard step state ─────────────────────────────────────────────────
 
-export type BookingStep = 1 | 2 | 3 | 4 | 5 | 6;
+export type BookingStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 export interface CustomerInfo {
   name: string;
