@@ -28,6 +28,16 @@ export function Step2Scheduling() {
     return h * 60 + m;
   };
 
+  const formatTimeTo12Hour = (timeStr: string): string => {
+    const [hourStr, minuteStr] = timeStr.split(":");
+    let hour = parseInt(hourStr, 10);
+    const minutes = minuteStr;
+    const period = hour >= 12 ? "PM" : "AM";
+    hour = hour % 12;
+    if (hour === 0) hour = 12;
+    return `${hour}:${minutes} ${period}`;
+  };
+
   // Auto-set default 1h end time when start changes (start slot's own end)
   useEffect(() => {
     if (!selectedStartTime || slots.length === 0) return;
@@ -101,7 +111,7 @@ export function Step2Scheduling() {
                   className={`sb-slot ${selectedStartTime === slot.start ? "sb-slot--selected" : ""} ${!slot.available ? "sb-slot--taken" : ""}`}
                   onClick={() => slot.available && setStartTime(slot.start)}
                 >
-                  {slot.start}
+                  {formatTimeTo12Hour(slot.start)}
                 </button>
               ))}
             </div>
@@ -125,8 +135,10 @@ export function Step2Scheduling() {
                   }
                 >
                   1h (
-                  {slots.find((s) => s.start === selectedStartTime)?.end ||
-                    "..."}
+                  {formatTimeTo12Hour(
+                    slots.find((s) => s.start === selectedStartTime)?.end ||
+                      "...",
+                  )}
                   )
                 </option>
                 {endTimeOptions.map((slot, i) => {
@@ -143,7 +155,7 @@ export function Step2Scheduling() {
                       value={slot.end}
                       disabled={tooShort || tooLong}
                     >
-                      {hours}h ({slot.end})
+                      {hours}h ({formatTimeTo12Hour(slot.end)})
                     </option>
                   );
                 })}

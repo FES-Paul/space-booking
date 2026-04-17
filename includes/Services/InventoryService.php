@@ -1,165 +1,159 @@
-<?php
-declare(strict_types=1);
+<?php declare(strict_types=1);
 
 namespace SpaceBooking\Services;
 
-/**
- * Checks whether Extras (shared assets) have available inventory
- * for a given time window, preventing double-booking of shared items.
- */
-final class InventoryService {
+final class InventoryService
+{
+	private function time_to_minutes(string $time): int
+	{
+		[$h, $m] = explode(':', $time);
+		return (int) $h * 60 + (int) $m;
+	}
 
-	/**
-	 * Returns Extras available for a given space/date/time window.
-	 *
-	 * @param int    $space_id
-	 * @param string $date       Y-m-d
-	 * @param string $start_time H:i
-	 * @param string $end_time   H:i
-	 * @return array  Each item: { id, title, price, inventory, available_qty, is_available }
-	 */
-	public function get_available_extras(
-		int $space_id,
-		string $date,
-		string $start_time,
-		string $end_time
-	): array {
-		// Fetch all published extras allowed for this space (or global)
+	private function is_override_blocked(int $extra_id, int $space_id, string $date, string $start_time, string $end_time): bool
+	{
+		$overrides = get_post_meta($extra_id, '_sb_space_avail_overrides', true) ?: [];
+		if (!is_array($overrides))
+			return false;
+
+		$day_of_week = (int) (new \DateTime($date))->format('w');  // 0=Sun..6=Sat
+
+		foreach ($overrides as $ov) {
+			if ((int) ($ov['space_id'] ?? 0) !== $space_id)
+				continue;
+			if (!in_array($day_of_week, $ov['days'] ?? [], true))
+				continue;
+
+			if (!empty($ov['closed'])) {
+				return true;  // Closed override
+			}
+
+			// Time window restriction
+			$ov_start = $this->time_to_minutes($ov['start_time'] ?? '');
+			$ov_end = $this->time_to_minutes($ov['end_time'] ?? '');
+			if (!$ov_start || !$ov_end)
+				continue;
+
+			$request_start = $this->time_to_minutes($start_time);
+			$request_end = $this->time_to_minutes($end_time);
+
+			// AVAILABILITY window: block if request does NOT fully contain/overlap window? No:
+			// Block if OUTSIDE window (not overlapping)
+			if ($ov_start && $ov_end && ($request_end <= $ov_start || $request_start >= $ov_end)) {
+				return true;  // Outside availability window
+			}
+		}
+		return false;
+	}
+
+	public function get_available_extras(int $space_id, string $date, string $start_time, string $end_time): array
+	{
 		$args = [
-			'post_type'      => 'sb_extra',
-			'post_status'    => 'publish',
+			'post_type' => 'sb_extra',
+			'post_status' => 'publish',
 			'posts_per_page' => -1,
-			'orderby'        => 'title',
-			'order'          => 'ASC',
+			'orderby' => 'title',
+			'order' => 'ASC',
 		];
 
-		$extras = get_posts( $args );
+		$extras = get_posts($args);
 		$result = [];
 
-		foreach ( $extras as $extra ) {
-			// Check if this extra is restricted to specific spaces
-			$allowed_spaces = get_post_meta( $extra->ID, '_sb_allowed_spaces', true );
-			if ( is_array( $allowed_spaces ) && ! empty( $allowed_spaces ) ) {
-				if ( ! in_array( $space_id, array_map( 'intval', $allowed_spaces ), true ) ) {
-					continue; // Not available for this space
+		foreach ($extras as $extra) {
+			$allowed_spaces = get_post_meta($extra->ID, '_sb_allowed_spaces', true);
+			if (is_array($allowed_spaces) && !empty($allowed_spaces)) {
+				if (!in_array($space_id, array_map('intval', $allowed_spaces), true)) {
+					continue;
 				}
 			}
 
-			$inventory     = (int) get_post_meta( $extra->ID, '_sb_inventory', true );
-			$inventory     = max( 1, $inventory ); // default 1
-			$booked_qty    = $this->get_booked_quantity( $extra->ID, $date, $start_time, $end_time );
-			$available_qty = max( 0, $inventory - $booked_qty );
+			// Check space/day/time overrides FIRST
+			if ($this->is_override_blocked($extra->ID, $space_id, $date, $start_time, $end_time)) {
+				$result[] = [
+					'id' => $extra->ID,
+					'title' => $extra->post_title,
+					'description' => $extra->post_excerpt ?: wp_trim_words($extra->post_content, 20),
+					'price' => (float) get_post_meta($extra->ID, '_sb_extra_price', true),
+					'inventory' => (int) get_post_meta($extra->ID, '_sb_inventory', true),
+					'booked_qty' => 0,
+					'available_qty' => 0,
+					'is_available' => false,
+					'unavailable_reason' => 'space_override',
+					'thumbnail' => get_the_post_thumbnail_url($extra->ID, 'thumbnail') ?: null,
+				];
+				continue;
+			}
+
+			$inventory = max(1, (int) get_post_meta($extra->ID, '_sb_inventory', true));
+			$booked_qty = $this->get_booked_quantity($extra->ID, $date, $start_time, $end_time);
+			$available_qty = max(0, $inventory - $booked_qty);
 
 			$result[] = [
-				'id'            => $extra->ID,
-				'title'         => $extra->post_title,
-				'description'   => $extra->post_excerpt ?: wp_trim_words( $extra->post_content, 20 ),
-				'price'         => (float) get_post_meta( $extra->ID, '_sb_extra_price', true ),
-				'inventory'     => $inventory,
-				'booked_qty'    => $booked_qty,
+				'id' => $extra->ID,
+				'title' => $extra->post_title,
+				'description' => $extra->post_excerpt ?: wp_trim_words($extra->post_content, 20),
+				'price' => (float) get_post_meta($extra->ID, '_sb_extra_price', true),
+				'inventory' => $inventory,
+				'booked_qty' => $booked_qty,
 				'available_qty' => $available_qty,
-				'is_available'  => $available_qty > 0,
-				'thumbnail'     => get_the_post_thumbnail_url( $extra->ID, 'thumbnail' ) ?: null,
+				'is_available' => $available_qty > 0,
+				'unavailable_reason' => $available_qty === 0 ? 'sold_out' : null,
+				'thumbnail' => get_the_post_thumbnail_url($extra->ID, 'thumbnail') ?: null,
 			];
 		}
 
 		return $result;
 	}
 
-	/**
-	 * Returns how many units of an extra are already confirmed for the time window.
-	 */
-	public function get_booked_quantity(
-		int $extra_id,
-		string $date,
-		string $start_time,
-		string $end_time
-	): int {
+	public function get_booked_quantity(int $extra_id, string $date, string $start_time, string $end_time): int
+	{
 		global $wpdb;
 
-		$result = $wpdb->get_var( $wpdb->prepare(
-			"SELECT COALESCE( SUM(be.quantity), 0 )
-			 FROM {$wpdb->prefix}sb_booking_extras be
-			 INNER JOIN {$wpdb->prefix}sb_bookings b ON b.id = be.booking_id
-			 WHERE be.extra_id     = %d
-			   AND b.booking_date  = %s
-			   AND b.status        IN ('pending', 'confirmed')
-			   AND b.start_time    < %s
-			   AND b.end_time      > %s",
-			$extra_id,
-			$date,
-			$end_time,
-			$start_time
-		) );
-
-		return (int) $result;
+		return (int) $wpdb->get_var($wpdb->prepare(
+			"SELECT COALESCE(SUM(be.quantity), 0) 
+			FROM {$wpdb->prefix}sb_booking_extras be
+			JOIN {$wpdb->prefix}sb_bookings b ON b.id = be.booking_id 
+			WHERE be.extra_id = %d AND b.booking_date = %s 
+			AND b.status IN ('pending', 'confirmed') 
+			AND b.start_time < %s AND b.end_time > %s",
+			$extra_id, $date, $end_time, $start_time
+		));
 	}
 
-	/**
-	 * Validates that all requested extras are available before confirming booking.
-	 *
-	 * @param array  $extras     [ ['extra_id' => int, 'quantity' => int], ... ]
-	 * @param string $date
-	 * @param string $start_time
-	 * @param string $end_time
-	 * @param int    $exclude_booking_id  Exclude this booking from the count (for re-checks)
-	 * @return array  [ 'valid' => bool, 'conflicts' => [ extra_title, ... ] ]
-	 */
-	public function validate_extras(
-		array $extras,
-		string $date,
-		string $start_time,
-		string $end_time,
-		int $exclude_booking_id = 0
-	): array {
+	public function validate_extras(array $extras, string $date, string $start_time, string $end_time, int $exclude_booking_id = 0): array
+	{
 		$conflicts = [];
 
-		foreach ( $extras as $item ) {
+		foreach ($extras as $item) {
 			$extra_id = (int) $item['extra_id'];
-			$quantity = max( 1, (int) ( $item['quantity'] ?? 1 ) );
+			$quantity = max(1, (int) ($item['quantity'] ?? 1));
 
-			$inventory  = max( 1, (int) get_post_meta( $extra_id, '_sb_inventory', true ) );
-			$booked_qty = $this->get_booked_quantity_excluding(
-				$extra_id, $date, $start_time, $end_time, $exclude_booking_id
-			);
+			$inventory = max(1, (int) get_post_meta($extra_id, '_sb_inventory', true));
+			$booked_qty = $this->get_booked_quantity_excluding($extra_id, $date, $start_time, $end_time, $exclude_booking_id);
 
-			if ( ( $booked_qty + $quantity ) > $inventory ) {
-				$conflicts[] = get_the_title( $extra_id ) ?: "Extra #{$extra_id}";
+			if (($booked_qty + $quantity) > $inventory) {
+				$conflicts[] = get_the_title($extra_id) ?: "Extra #{$extra_id}";
 			}
 		}
 
 		return [
-			'valid'     => empty( $conflicts ),
+			'valid' => empty($conflicts),
 			'conflicts' => $conflicts,
 		];
 	}
 
-	private function get_booked_quantity_excluding(
-		int $extra_id,
-		string $date,
-		string $start_time,
-		string $end_time,
-		int $exclude_booking_id
-	): int {
+	private function get_booked_quantity_excluding(int $extra_id, string $date, string $start_time, string $end_time, int $exclude_booking_id): int
+	{
 		global $wpdb;
 
-		$result = $wpdb->get_var( $wpdb->prepare(
-			"SELECT COALESCE( SUM(be.quantity), 0 )
-			 FROM {$wpdb->prefix}sb_booking_extras be
-			 INNER JOIN {$wpdb->prefix}sb_bookings b ON b.id = be.booking_id
-			 WHERE be.extra_id     = %d
-			   AND b.booking_date  = %s
-			   AND b.id           != %d
-			   AND b.status        IN ('pending', 'confirmed')
-			   AND b.start_time    < %s
-			   AND b.end_time      > %s",
-			$extra_id,
-			$date,
-			$exclude_booking_id,
-			$end_time,
-			$start_time
-		) );
-
-		return (int) $result;
+		return (int) $wpdb->get_var($wpdb->prepare(
+			"SELECT COALESCE(SUM(be.quantity), 0) 
+			FROM {$wpdb->prefix}sb_booking_extras be
+			JOIN {$wpdb->prefix}sb_bookings b ON b.id = be.booking_id 
+			WHERE be.extra_id = %d AND b.booking_date = %s AND b.id != %d 
+			AND b.status IN ('pending', 'confirmed') 
+			AND b.start_time < %s AND b.end_time > %s",
+			$extra_id, $date, $exclude_booking_id, $end_time, $start_time
+		));
 	}
 }

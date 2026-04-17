@@ -37,4 +37,10 @@ vendor/
 # WordPress/plugin temporary files
 *.tmp
 *.temp
-*TODO*.md
+
+
+# Ignore all Markdown files in all directories
+*.md
+
+# Except for README.md
+!README.md

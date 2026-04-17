@@ -1,7 +1,7 @@
 import React from "react";
 import { useBookingStore } from "@/store/bookingStore";
 
-export function Step6Confirmation() {
+export function Step7Confirmation() {
   const {
     customerInfo,
     selectedSpace,
@@ -23,23 +23,23 @@ export function Step6Confirmation() {
     availableExtras.find((e) => e.id === extraId)?.title ?? `Extra #${extraId}`;
 
   return (
-    <div className="sb-step sb-step-6">
+    <div className="sb-step sb-step-7">
       {/* Success banner */}
       <div className="sb-confirm-banner">
         <span className="sb-confirm-icon" aria-hidden="true">
           ✅
         </span>
-        <h2 className="sb-confirm-title">Booking Confirmed!</h2>
+        <h2 className="sb-confirm-title">Booking Created!</h2>
         <p className="sb-confirm-subtitle">
-          A confirmation email has been sent to{" "}
-          <strong>{customerInfo.email}</strong>.
+          You're being redirected to secure payment. A confirmation email will
+          be sent after payment.
         </p>
       </div>
 
       {/* Invoice card */}
       <div className="sb-invoice">
         <div className="sb-invoice__header">
-          <h3>Booking Receipt</h3>
+          <h3>Booking Receipt (Pending Payment)</h3>
           {bookingId && <span className="sb-invoice__id">#{bookingId}</span>}
         </div>
 
@@ -89,10 +89,9 @@ export function Step6Confirmation() {
               </tr>
             )}
             <tr className="sb-invoice__total">
-              <th>Total Paid</th>
+              <th>Total Due</th>
               <td>
-                {window.sbConfig.symbol}
-                {totalPrice.toFixed(2)}
+                {totalPrice.toFixed(2)} {window.sbConfig.symbol}
               </td>
             </tr>
           </tbody>
@@ -110,8 +109,8 @@ export function Step6Confirmation() {
       </div>
 
       <p className="sb-confirm-lookup">
-        Need to view or manage your bookings?{" "}
-        <a href="/booking-lookup/">Use our booking lookup</a> with your email.
+        You'll receive confirmation after payment. Manage bookings via{" "}
+        <a href="/booking-lookup/">booking lookup</a> with your email.
       </p>
     </div>
   );

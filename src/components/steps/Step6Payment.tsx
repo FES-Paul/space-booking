@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useBookingStore } from "@/store/bookingStore";
 import { createBooking } from "@/utils/api";
 
-export function Step5Checkout() {
+export function Step6Payment() {
   const {
     checkoutUrl,
     priceBreakdown,
@@ -13,14 +13,15 @@ export function Step5Checkout() {
     selectedStartTime,
     selectedEndTime,
     customerInfo,
-    setCheckoutData,
+    selectedExtras,
+    availableExtras,
     prevStep,
   } = useBookingStore();
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleCheckout = async () => {
+  const handlePayment = async () => {
     const spaceId = selectedSpace?.id ?? selectedPackage?.space_id;
     const packageId = selectedPackage?.id;
 
@@ -43,17 +44,18 @@ export function Step5Checkout() {
         customer_email: customerInfo.email,
         customer_phone: customerInfo.phone,
         notes: customerInfo.notes,
-        extras: useBookingStore.getState().selectedExtras,
+        extras: selectedExtras,
       });
 
-      setCheckoutData({
+      // Preserve enriched breakdown, update other checkout data
+      useBookingStore.getState().setCheckoutData({
         checkoutUrl: res.checkout_url,
         bookingId: res.booking_id,
         totalPrice: res.total_price,
-        breakdown: res.breakdown,
+        breakdown: priceBreakdown, // Keep frontend enriched breakdown
       });
 
-      // Redirect to WooCommerce checkout
+      // Redirect to WooCommerce checkout for payment
       window.location.href = res.checkout_url;
     } catch (e) {
       setError((e as Error).message);
@@ -63,10 +65,10 @@ export function Step5Checkout() {
   };
 
   return (
-    <div className="sb-step sb-step-5">
-      <h2 className="sb-step__title">Review &amp; Checkout</h2>
+    <div className="sb-step sb-step-6">
+      <h2 className="sb-step__title">Complete Booking</h2>
       <div className="sb-checkout-summary">
-        <h3>Booking Summary</h3>
+        <h3>Final Review</h3>
 
         <div className="sb-summary-grid">
           <div className="sb-summary-row">
@@ -99,7 +101,8 @@ export function Step5Checkout() {
             <li key={i} className="sb-breakdown__item">
               <span>{item.label}</span>
               <span>
-                {item.amount.toFixed(2)} {window.sbConfig.symbol}
+                {window.sbConfig.symbol}
+                {item.amount.toFixed(2)}
               </span>
             </li>
           ))}
@@ -107,7 +110,8 @@ export function Step5Checkout() {
         <div className="sb-breakdown__total">
           Total:{" "}
           <strong>
-            {totalPrice.toFixed(2)} {window.sbConfig.symbol}
+            {window.sbConfig.symbol}
+            {totalPrice.toFixed(2)}
           </strong>
         </div>
 
@@ -119,19 +123,21 @@ export function Step5Checkout() {
           </button>
           <button
             className="sb-btn sb-btn--primary"
-            onClick={handleCheckout}
-            disabled={loading || checkoutUrl}
+            onClick={handlePayment}
+            disabled={loading || !!checkoutUrl}
           >
             {loading
               ? "Creating Booking..."
               : checkoutUrl
                 ? "Redirecting..."
-                : "Checkout Securely with WooCommerce →"}
+                : "Proceed to Secure Payment →"}
           </button>
         </div>
 
         {checkoutUrl && (
-          <p className="sb-note">Redirecting to secure checkout...</p>
+          <p className="sb-note">
+            Redirecting to secure WooCommerce checkout...
+          </p>
         )}
       </div>
     </div>

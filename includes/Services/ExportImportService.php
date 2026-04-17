@@ -1,44 +1,44 @@
-<?php
-declare(strict_types=1);
+<?php declare(strict_types=1);
 
 namespace SpaceBooking\Services;
 
 /**
  * Export/Import service for CPT data + meta as JSON.
  */
-final class ExportImportService {
-
+final class ExportImportService
+{
 	public const CPTS = ['sb_space', 'sb_package', 'sb_extra'];
 
 	/**
 	 * Export all CPT posts + meta to JSON string.
 	 */
-	public function export_json(): string {
+	public function export_json(): string
+	{
 		$data = [];
 		foreach (self::CPTS as $post_type) {
 			$posts = get_posts([
-				'post_type'      => $post_type,
-				'post_status'    => ['publish', 'draft'],
+				'post_type' => $post_type,
+				'post_status' => ['publish', 'draft'],
 				'posts_per_page' => -1,
-				'orderby'        => 'ID',
+				'orderby' => 'ID',
 			]);
 
 			$data[$post_type] = [];
 			foreach ($posts as $post) {
 				$post_data = [
-					'ID'            => $post->ID, // For reference, not used on import
-					'post_title'    => $post->post_title,
-					'post_content'  => $post->post_content,
-					'post_excerpt'  => $post->post_excerpt,
-					'post_status'   => $post->post_status,
-					'post_date'     => $post->post_date,
-					'meta'          => [],
+					'ID' => $post->ID,  // For reference, not used on import
+					'post_title' => $post->post_title,
+					'post_content' => $post->post_content,
+					'post_excerpt' => $post->post_excerpt,
+					'post_status' => $post->post_status,
+					'post_date' => $post->post_date,
+					'meta' => [],
 				];
 
 				// Get ALL meta keys
 				$meta_keys = get_post_meta($post->ID);
 				foreach ($meta_keys as $key => $values) {
-					$post_data['meta'][$key] = $values[0]; // Single value (arrays stored as JSON)
+					$post_data['meta'][$key] = $values[0];  // Single value (arrays stored as JSON)
 				}
 
 				$data[$post_type][] = $post_data;
@@ -52,15 +52,20 @@ final class ExportImportService {
 	 * Import from JSON file, optionally delete existing.
 	 * @return array [success, message, new_ids map]
 	 */
-	public function import_json(string $json_file, bool $delete_existing = false): array {
-		if (!file_exists($json_file) || 'application/json' !== wp_check_filetype($json_file)['type']) {
-			return [false, 'Invalid JSON file.'];
+	public function import_json(string $json_file, bool $delete_existing = false): array
+	{
+		if (!file_exists($json_file)) {
+			return [false, 'Temp file missing: ' . basename($json_file)];
 		}
 
 		$json = file_get_contents($json_file);
+		if (false === $json) {
+			return [false, 'Cannot read file contents'];
+		}
+
 		$data = json_decode($json, true);
 		if (JSON_ERROR_NONE !== json_last_error()) {
-			return [false, 'Invalid JSON.'];
+			return [false, 'Invalid JSON: ' . json_last_error_msg()];
 		}
 
 		if ($delete_existing) {
@@ -74,20 +79,22 @@ final class ExportImportService {
 
 		$new_ids = [];
 		foreach (self::CPTS as $post_type) {
-			if (empty($data[$post_type])) continue;
+			if (empty($data[$post_type]))
+				continue;
 
 			foreach ($data[$post_type] as $item) {
 				$postarr = [
-					'post_type'    => $post_type,
-					'post_title'   => $item['post_title'],
+					'post_type' => $post_type,
+					'post_title' => $item['post_title'],
 					'post_content' => $item['post_content'],
 					'post_excerpt' => $item['post_excerpt'],
-					'post_status'  => $item['post_status'],
-					'post_date'    => $item['post_date'],
+					'post_status' => $item['post_status'],
+					'post_date' => $item['post_date'],
 				];
 
 				$new_post_id = wp_insert_post($postarr);
-				if (is_wp_error($new_post_id)) continue;
+				if (is_wp_error($new_post_id))
+					continue;
 
 				// Restore meta
 				foreach ($item['meta'] ?? [] as $key => $value) {
@@ -105,7 +112,8 @@ final class ExportImportService {
 		return [true, 'Imported successfully.', $new_ids];
 	}
 
-	private function remap_ids($value, array $new_ids_map): mixed {
+	private function remap_ids($value, array $new_ids_map): mixed
+	{
 		if (is_array($value)) {
 			$mapped = [];
 			foreach ($value as $old_id) {

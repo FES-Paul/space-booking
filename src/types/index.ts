@@ -41,11 +41,12 @@ export interface Extra {
   booked_qty: number;
   available_qty: number;
   is_available: boolean;
+  unavailable_reason: "sold_out" | "space_override" | null;
   thumbnail: string | null;
 }
 
 export interface TimeSlot {
-  start: string; // "H:i"
+  start: string; // \"H:i\"
   end: string;
   available: boolean;
 }
@@ -61,6 +62,11 @@ export interface AvailabilityResponse {
 export interface PriceBreakdownItem {
   label: string;
   amount: number;
+  context?: {
+    type: 'space' | 'package' | 'extra' | 'segment' | 'modifier';
+    name?: string;
+    id?: number;
+  };
 }
 
 export interface PricingResponse {
@@ -74,7 +80,7 @@ export interface PricingResponse {
 
 export interface BookingCreateResponse {
   booking_id: number;
-  client_secret: string;
+  checkout_url: string;
   total_price: number;
   breakdown: PriceBreakdownItem[];
 }
@@ -89,7 +95,7 @@ export interface CustomerBooking {
   end_time: string;
   duration_hours: number;
   total_price: number;
-  status: 'pending' | 'confirmed' | 'cancelled' | 'refunded';
+  status: "pending" | "confirmed" | "cancelled" | "refunded";
   customer_name: string;
   customer_email: string;
   extras: Array<{ extra_name: string; quantity: number; unit_price: number }>;
@@ -106,6 +112,7 @@ declare global {
       currency: string;
       symbol: string;
       dateFormat: string;
+      bookingPolicy: string;
     };
   }
 }
@@ -119,7 +126,7 @@ export interface SelectedExtra {
 
 // ── Booking wizard step state ─────────────────────────────────────────────────
 
-export type BookingStep = 1 | 2 | 3 | 4 | 5 | 6;
+export type BookingStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 export interface CustomerInfo {
   name: string;
@@ -127,3 +134,4 @@ export interface CustomerInfo {
   phone: string;
   notes: string;
 }
+
