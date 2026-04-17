@@ -44,7 +44,28 @@ final class WooCommerceService
         $product->set_sold_individually(true);
         $product->set_catalog_visibility('catalog');
         $product->set_regular_price($total_price);
-        $product->set_description('Space booking service - #' . $booking_id);
+        // Format detailed description from breakdown
+        $breakdown_html = 'Space booking service - #' . $booking_id;
+        $space_title = get_the_title($booking_data['space_id']);
+        $date = $booking_data['date'] ?? '';
+        $start = $booking_data['start_time'] ?? '';
+        $end = $booking_data['end_time'] ?? '';
+        if ($date && $start && $end) {
+            $breakdown_html .= '<br><small>' . $space_title . ' | ' . $date . ' ' . $start . '–' . $end . '</small>';
+        }
+        $breakdown_raw = $booking_data['breakdown'] ?? [];
+        if (!empty($breakdown_raw) && is_array($breakdown_raw)) {
+            $breakdown_html .= '<ul style=\"margin: 10px 0; padding-left: 20px;\">';
+            foreach ($breakdown_raw as $item) {
+                $label = htmlspecialchars($item['label'] ?? 'Item');
+                $amount = number_format((float) ($item['amount'] ?? 0), 2);
+                $symbol = get_woocommerce_currency_symbol();
+                $breakdown_html .= '<li>' . $label . ': <strong>' . $symbol . $amount . '</strong></li>';
+            }
+            $breakdown_html .= '</ul>';
+        }
+        $breakdown_html .= '<em>Total: ' . get_woocommerce_currency_symbol() . number_format($total_price, 2) . '</em>';
+        $product->set_description($breakdown_html);
         $product->save();
 
         error_log('SpaceBooking WC: Product ID ' . $product->get_id() . ' published, price $' . $total_price);
