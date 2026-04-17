@@ -11,6 +11,7 @@ export function Step3Addons() {
     selectedStartTime,
     selectedEndTime,
     selectedExtras,
+    availableExtras,
     toggleExtra,
     setAvailableExtras,
     setPriceBreakdown,
@@ -40,7 +41,13 @@ export function Step3Addons() {
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [spaceId, selectedDate, selectedStartTime, selectedEndTime]);
+  }, [
+    spaceId,
+    selectedDate,
+    selectedStartTime,
+    selectedEndTime,
+    setAvailableExtras,
+  ]);
 
   // Re-calculate price whenever extras selection changes
   useEffect(() => {
@@ -55,15 +62,40 @@ export function Step3Addons() {
       package_id: packageId,
     })
       .then((res) => {
-        console.log("RESPONS BREAKDOWN: ", res);
-        setPreview({ total: res.total_price, breakdown: res.breakdown });
-        setPriceBreakdown(res.breakdown, res.total_price);
+        console.log("RESPONSE BREAKDOWN: ", res);
+        const enrichedBreakdown = res.breakdown.map((item: any) => {
+          let label = item.label;
+          if (label === "Package price" && selectedPackage) {
+            label = `${selectedPackage.title}`;
+          } else if (label === "Extras" && selectedExtras.length > 0) {
+            const extraNames = selectedExtras
+              .map((e: any) => {
+                const extra = availableExtras.find(
+                  (ex: any) => ex.id === e.extra_id,
+                );
+                return extra ? extra.title : `Extra #${e.extra_id}`;
+              })
+              .join(" + ");
+            label = `Extras: ${extraNames}`;
+          } else if (
+            selectedSpace &&
+            (label.includes("–") || label.match(/^\\d{2}:\\d{2}–\\d{2}:\\d{2}/))
+          ) {
+            label = `${selectedSpace.title}: ${label}`;
+          }
+          return { ...item, label };
+        });
+        setPreview({ total: res.total_price, breakdown: enrichedBreakdown });
+        setPriceBreakdown(enrichedBreakdown, res.total_price);
       })
       .catch(() => {
         /* silent */
       });
   }, [
     selectedExtras,
+    availableExtras,
+    selectedSpace,
+    selectedPackage,
     spaceId,
     selectedDate,
     selectedStartTime,

@@ -19,9 +19,9 @@ interface BookingState {
   selectedPackage: Package | null;
 
   // ── Step 2: Scheduling ───────────────────────────────────────────────────
-  selectedDate: string; // YYYY-MM-DD
-  selectedStartTime: string; // HH:MM
-  selectedEndTime: string; // HH:MM
+  selectedDate: string;
+  selectedStartTime: string;
+  selectedEndTime: string;
 
   // ── Step 3: Add-ons ──────────────────────────────────────────────────────
   availableExtras: Extra[];
@@ -138,8 +138,32 @@ export const useBookingStore = create<BookingState>((set, get) => ({
   setCheckoutData: ({ checkoutUrl, bookingId, totalPrice, breakdown }) =>
     set({ checkoutUrl, bookingId, totalPrice, priceBreakdown: breakdown }),
 
-  setPriceBreakdown: (breakdown, total) =>
-    set({ priceBreakdown: breakdown, totalPrice: total }),
+  setPriceBreakdown: (rawBreakdown: PriceBreakdownItem[], total: number) => {
+    const state = get();
+    const breakdown = rawBreakdown.map((item: PriceBreakdownItem) => {
+      let label = item.label;
+      if (label === "Package price" && state.selectedPackage) {
+        label = `${state.selectedPackage.title}`;
+      } else if (label === "Extras" && state.selectedExtras.length > 0) {
+        const extraNames = state.selectedExtras
+          .map((e: SelectedExtra) => {
+            const extra = state.availableExtras.find(
+              (ex: Extra) => ex.id === e.extra_id,
+            );
+            return extra ? extra.title : `Extra #${e.extra_id}`;
+          })
+          .join(" + ");
+        label = `Extras: ${extraNames}`;
+      } else if (
+        state.selectedSpace &&
+        (label.includes("–") || label.match(/^\d{2}:\d{2}–\d{2}:\d{2}/))
+      ) {
+        label = `${state.selectedSpace.title}: ${label}`;
+      }
+      return { ...item, label };
+    });
+    set({ priceBreakdown: breakdown, totalPrice: total });
+  },
 
   // ── Step 6 ───────────────────────────────────────────────────────────────
   confirmBooking: () => set({ isConfirmed: true }),

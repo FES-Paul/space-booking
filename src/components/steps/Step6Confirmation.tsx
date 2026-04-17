@@ -1,15 +1,23 @@
-import React from 'react';
-import { useBookingStore } from '@/store/bookingStore';
+import React from "react";
+import { useBookingStore } from "@/store/bookingStore";
 
 export function Step6Confirmation() {
   const {
-    customerInfo, selectedSpace, selectedPackage,
-    selectedDate, selectedStartTime, selectedEndTime,
-    totalPrice, selectedExtras, availableExtras,
-    bookingId, reset,
+    customerInfo,
+    selectedSpace,
+    selectedPackage,
+    selectedDate,
+    selectedStartTime,
+    selectedEndTime,
+    totalPrice,
+    selectedExtras,
+    availableExtras,
+    bookingId,
+    reset,
   } = useBookingStore();
 
-  const spaceName = selectedSpace?.title ?? selectedPackage?.space_name ?? 'Space';
+  const spaceName =
+    selectedSpace?.title ?? selectedPackage?.space_name ?? "Space";
 
   const getExtraTitle = (extraId: number) =>
     availableExtras.find((e) => e.id === extraId)?.title ?? `Extra #${extraId}`;
@@ -18,10 +26,13 @@ export function Step6Confirmation() {
     <div className="sb-step sb-step-6">
       {/* Success banner */}
       <div className="sb-confirm-banner">
-        <span className="sb-confirm-icon" aria-hidden="true">✅</span>
+        <span className="sb-confirm-icon" aria-hidden="true">
+          ✅
+        </span>
         <h2 className="sb-confirm-title">Booking Confirmed!</h2>
         <p className="sb-confirm-subtitle">
-          A confirmation email has been sent to <strong>{customerInfo.email}</strong>.
+          A confirmation email has been sent to{" "}
+          <strong>{customerInfo.email}</strong>.
         </p>
       </div>
 
@@ -44,7 +55,9 @@ export function Step6Confirmation() {
             </tr>
             <tr>
               <th>Time</th>
-              <td>{selectedStartTime} – {selectedEndTime}</td>
+              <td>
+                {selectedStartTime} – {selectedEndTime}
+              </td>
             </tr>
             <tr>
               <th>Name</th>
@@ -77,7 +90,10 @@ export function Step6Confirmation() {
             )}
             <tr className="sb-invoice__total">
               <th>Total Paid</th>
-              <td>${totalPrice.toFixed(2)}</td>
+              <td>
+                {window.sbConfig.symbol}
+                {totalPrice.toFixed(2)}
+              </td>
             </tr>
           </tbody>
         </table>
@@ -94,7 +110,7 @@ export function Step6Confirmation() {
       </div>
 
       <p className="sb-confirm-lookup">
-        Need to view or manage your bookings?{' '}
+        Need to view or manage your bookings?{" "}
         <a href="/booking-lookup/">Use our booking lookup</a> with your email.
       </p>
     </div>

@@ -33,7 +33,11 @@ final class WooCommerceService
 
         // Create virtual product on-the-fly
         $product = new WC_Product_Simple();
-        $product->set_name(sprintf('Booking #%d - %s', $booking_id, get_the_title($booking_data['space_id'])));
+        $space_id = $booking_data['space_id'];
+        $space_title = get_the_title($space_id);
+        $package_id = $booking_data['package_id'] ?? null;
+        $package_title = $package_id ? get_the_title($package_id) : null;
+        $product->set_name(sprintf('Booking #%d - %s', $booking_id, $package_title ?: $space_title));
         $product->set_price($total_price);
         $product->set_status('publish');
         $product->set_catalog_visibility('hidden');
@@ -44,27 +48,44 @@ final class WooCommerceService
         $product->set_sold_individually(true);
         $product->set_catalog_visibility('catalog');
         $product->set_regular_price($total_price);
-        // Format detailed description from breakdown
-        $breakdown_html = 'Space booking service - #' . $booking_id;
-        $space_title = get_the_title($booking_data['space_id']);
+        // Format detailed description with full breakdown and extras
+        $breakdown_html = '<strong>Space booking service - #' . $booking_id . '</strong>';
         $date = $booking_data['date'] ?? '';
         $start = $booking_data['start_time'] ?? '';
         $end = $booking_data['end_time'] ?? '';
+        $location_title = $package_title ?: $space_title;
         if ($date && $start && $end) {
-            $breakdown_html .= '<br><small>' . $space_title . ' | ' . $date . ' ' . $start . '–' . $end . '</small>';
+            $breakdown_html .= '<br><small>' . htmlspecialchars($location_title) . ' | ' . $date . ' ' . $start . '–' . $end . '</small>';
         }
         $breakdown_raw = $booking_data['breakdown'] ?? [];
         if (!empty($breakdown_raw) && is_array($breakdown_raw)) {
+            $breakdown_html .= '<h4 style=\"margin: 15px 0 10px 0; font-size: 1.1em;\">Price Breakdown</h4>';
             $breakdown_html .= '<ul style=\"margin: 10px 0; padding-left: 20px;\">';
             foreach ($breakdown_raw as $item) {
                 $label = htmlspecialchars($item['label'] ?? 'Item');
                 $amount = number_format((float) ($item['amount'] ?? 0), 2);
                 $symbol = get_woocommerce_currency_symbol();
-                $breakdown_html .= '<li>' . $label . ': <strong>' . $symbol . $amount . '</strong></li>';
+                $breakdown_html .= '<li style=\"margin-bottom: 5px;\"><strong>' . $label . '</strong>: ' . $symbol . $amount . '</li>';
             }
             $breakdown_html .= '</ul>';
         }
-        $breakdown_html .= '<em>Total: ' . get_woocommerce_currency_symbol() . number_format($total_price, 2) . '</em>';
+        // Add detailed extras breakdown with prices
+        $extras = $booking_data['extras'] ?? [];
+        if (!empty($extras)) {
+            $breakdown_html .= '<h4 style=\"margin: 15px 0 10px 0; font-size: 1.1em;\">Included Extras</h4>';
+            $breakdown_html .= '<ul style=\"margin: 10px 0; padding-left: 20px;\">';
+            foreach ($extras as $extra) {
+                $extra_id = (int) $extra['extra_id'];
+                $qty = (int) ($extra['quantity'] ?? 1);
+                $extra_title = get_the_title($extra_id);
+                $extra_price = (float) get_post_meta($extra_id, '_sb_extra_price', true);
+                $line_total = $extra_price * $qty;
+                $symbol = get_woocommerce_currency_symbol();
+                $breakdown_html .= '<li style=\"margin-bottom: 5px;\"><strong>' . htmlspecialchars($extra_title) . '</strong> × ' . $qty . ': ' . $symbol . number_format($line_total, 2) . '</li>';
+            }
+            $breakdown_html .= '</ul>';
+        }
+        $breakdown_html .= '<div style=\"margin-top: 15px; padding-top: 10px; border-top: 2px solid #eee; font-weight: bold; font-size: 1.2em;\">Total: <strong>' . get_woocommerce_currency_symbol() . number_format($total_price, 2) . '</strong></div>';
         $product->set_description($breakdown_html);
         $product->save();
 
@@ -86,7 +107,7 @@ final class WooCommerceService
             [],  // no variation
             [
                 'sb_booking_id' => $booking_id,
-                'sb_space_id' => $booking_data['space_id'],
+                'sb_space_id' => $space_id,
                 'sb_date' => $booking_data['date'],
                 'sb_start_time' => $booking_data['start_time'],
                 'sb_end_time' => $booking_data['end_time'],

@@ -46,7 +46,7 @@ export interface Extra {
 }
 
 export interface TimeSlot {
-  start: string; // "H:i"
+  start: string; // \"H:i\"
   end: string;
   available: boolean;
 }
@@ -62,6 +62,11 @@ export interface AvailabilityResponse {
 export interface PriceBreakdownItem {
   label: string;
   amount: number;
+  context?: {
+    type: 'space' | 'package' | 'extra' | 'segment' | 'modifier';
+    name?: string;
+    id?: number;
+  };
 }
 
 export interface PricingResponse {
@@ -129,3 +134,4 @@ export interface CustomerInfo {
   phone: string;
   notes: string;
 }
+

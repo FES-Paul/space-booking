@@ -66,7 +66,7 @@ export function Step5Terms() {
             onChange={(e) => setAgreed(e.target.checked)}
           />
           <span className="sb-checkbox-mark"></span>
-          <span style={{fontSize: 10}}>I have read and agree to the booking policy above</span>
+          <span style={{fontSize: 14}}>I have read and agree to the booking policy above</span>
         </label>
 
         {error && (

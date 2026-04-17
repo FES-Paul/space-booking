@@ -13,7 +13,8 @@ export function Step6Payment() {
     selectedStartTime,
     selectedEndTime,
     customerInfo,
-    setCheckoutData,
+    selectedExtras,
+    availableExtras,
     prevStep,
   } = useBookingStore();
 
@@ -43,14 +44,15 @@ export function Step6Payment() {
         customer_email: customerInfo.email,
         customer_phone: customerInfo.phone,
         notes: customerInfo.notes,
-        extras: useBookingStore.getState().selectedExtras,
+        extras: selectedExtras,
       });
 
-      setCheckoutData({
+      // Preserve enriched breakdown, update other checkout data
+      useBookingStore.getState().setCheckoutData({
         checkoutUrl: res.checkout_url,
         bookingId: res.booking_id,
         totalPrice: res.total_price,
-        breakdown: res.breakdown,
+        breakdown: priceBreakdown, // Keep frontend enriched breakdown
       });
 
       // Redirect to WooCommerce checkout for payment
@@ -99,7 +101,8 @@ export function Step6Payment() {
             <li key={i} className="sb-breakdown__item">
               <span>{item.label}</span>
               <span>
-                {item.amount.toFixed(2)} {window.sbConfig.symbol}
+                {window.sbConfig.symbol}
+                {item.amount.toFixed(2)}
               </span>
             </li>
           ))}
@@ -107,7 +110,8 @@ export function Step6Payment() {
         <div className="sb-breakdown__total">
           Total:{" "}
           <strong>
-            {totalPrice.toFixed(2)} {window.sbConfig.symbol}
+            {window.sbConfig.symbol}
+            {totalPrice.toFixed(2)}
           </strong>
         </div>
 
