@@ -1,19 +1,33 @@
-import React, { useEffect, useState } from 'react';
-import { useBookingStore } from '@/store/bookingStore';
-import { fetchSpaces, fetchPackages } from '@/utils/api';
-import type { Space, Package } from '@/types';
+import React, { useEffect, useState } from "react";
+import { useBookingStore } from "@/store/bookingStore";
+import { fetchSpaces, fetchPackages } from "@/utils/api";
+import type { Space, Package } from "@/types";
 
 export function Step1Selection() {
-  const { selectedSpace, selectedPackage, setSpace, setPackage, nextStep } = useBookingStore();
-  const [spaces,   setSpaces]   = useState<Space[]>([]);
+  const formatTimeTo12Hour = (timeStr: string): string => {
+    const [hourStr, minuteStr] = timeStr.split(":");
+    let hour = parseInt(hourStr, 10);
+    const minutes = minuteStr;
+    const period = hour >= 12 ? "PM" : "AM";
+    hour = hour % 12;
+    if (hour === 0) hour = 12;
+    return `${hour}:${minutes} ${period}`;
+  };
+
+  const { selectedSpace, selectedPackage, setSpace, setPackage, nextStep } =
+    useBookingStore();
+  const [spaces, setSpaces] = useState<Space[]>([]);
   const [packages, setPackages] = useState<Package[]>([]);
-  const [loading,  setLoading]  = useState(true);
-  const [tab,      setTab]      = useState<'space' | 'package'>('space');
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<"space" | "package">("space");
 
   useEffect(() => {
     setLoading(true);
     Promise.all([fetchSpaces(), fetchPackages()])
-      .then(([s, p]) => { setSpaces(s); setPackages(p); })
+      .then(([s, p]) => {
+        setSpaces(s);
+        setPackages(p);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -26,14 +40,14 @@ export function Step1Selection() {
       {/* Tabs */}
       <div className="sb-tabs">
         <button
-          className={`sb-tab ${tab === 'space' ? 'sb-tab--active' : ''}`}
-          onClick={() => setTab('space')}
+          className={`sb-tab ${tab === "space" ? "sb-tab--active" : ""}`}
+          onClick={() => setTab("space")}
         >
           Spaces
         </button>
         <button
-          className={`sb-tab ${tab === 'package' ? 'sb-tab--active' : ''}`}
-          onClick={() => setTab('package')}
+          className={`sb-tab ${tab === "package" ? "sb-tab--active" : ""}`}
+          onClick={() => setTab("package")}
         >
           Packages
         </button>
@@ -42,31 +56,78 @@ export function Step1Selection() {
       {loading && <div className="sb-loading">Loading…</div>}
 
       {/* Spaces */}
-      {!loading && tab === 'space' && (
+      {!loading && tab === "space" && (
         <div className="sb-cards">
           {spaces.map((space) => (
             <div
               key={space.id}
-              className={`sb-card ${selectedSpace?.id === space.id ? 'sb-card--selected' : ''}`}
+              className={`sb-card ${selectedSpace?.id === space.id ? "sb-card--selected" : ""}`}
               onClick={() => setSpace(space)}
               role="button"
               tabIndex={0}
-              onKeyDown={(e) => e.key === 'Enter' && setSpace(space)}
+              onKeyDown={(e) => e.key === "Enter" && setSpace(space)}
             >
-              {space.thumbnail && (
-                <img src={space.thumbnail} alt={space.title} className="sb-card__img" />
-              )}
+              <img
+                src={
+                  space.thumbnail ??
+                  "https://upload.wikimedia.org/wikipedia/commons/1/14/No_Image_Available.jpg"
+                }
+                alt={space.title}
+                className="sb-card__img"
+              />
               <div className="sb-card__body">
                 <h3 className="sb-card__title">{space.title}</h3>
                 <p className="sb-card__excerpt">{space.excerpt}</p>
-                <p className="sb-card__price">
-                  {window.sbConfig.symbol}{space.hourly_rate.toFixed(2)} / hr
-                  {space.capacity > 0 && ` · Up to ${space.capacity} guests`}
-                </p>
-
+                <div className="sb-card__price">
+                  <div>
+                    Regular: {window.sbConfig.symbol}
+                    {space.hourly_rate.toFixed(2)} / hr
+                  </div>
+                  {space.capacity > 0 && (
+                    <div>Up to {space.capacity} guests</div>
+                  )}
+                  {space.price_overrides &&
+                    space.price_overrides.length > 0 && (
+                      <div className="sb-price-overrides">
+                        {space.price_overrides.map((ov, idx) => {
+                          const todayDay = new Date().getDay();
+                          const appliesToday = ov.days.includes(todayDay);
+                          const dayNames = [
+                            "Sun",
+                            "Mon",
+                            "Tue",
+                            "Wed",
+                            "Thu",
+                            "Fri",
+                            "Sat",
+                          ];
+                          const dayLabel = ov.days
+                            .map((d) => dayNames[d])
+                            .join(", ");
+                          return (
+                            <div key={idx} className="sb-override">
+                              <span>
+                                {dayLabel} {formatTimeTo12Hour(ov.start_time)}-
+                                {formatTimeTo12Hour(ov.end_time)}:
+                              </span>
+                              <span>
+                                {window.sbConfig.symbol}
+                                {ov.hourly_rate.toFixed(2)}/hr
+                              </span>
+                              {appliesToday && (
+                                <span className="sb-active-override">✓</span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                </div>
               </div>
               {selectedSpace?.id === space.id && (
-                <span className="sb-card__check" aria-label="Selected">✓</span>
+                <span className="sb-card__check" aria-label="Selected">
+                  ✓
+                </span>
               )}
             </div>
           ))}
@@ -77,32 +138,39 @@ export function Step1Selection() {
       )}
 
       {/* Packages */}
-      {!loading && tab === 'package' && (
+      {!loading && tab === "package" && (
         <div className="sb-cards">
           {packages.map((pkg) => (
             <div
               key={pkg.id}
-              className={`sb-card ${selectedPackage?.id === pkg.id ? 'sb-card--selected' : ''}`}
+              className={`sb-card ${selectedPackage?.id === pkg.id ? "sb-card--selected" : ""}`}
               onClick={() => setPackage(pkg)}
               role="button"
               tabIndex={0}
-              onKeyDown={(e) => e.key === 'Enter' && setPackage(pkg)}
+              onKeyDown={(e) => e.key === "Enter" && setPackage(pkg)}
             >
-              {pkg.thumbnail && (
-                <img src={pkg.thumbnail} alt={pkg.title} className="sb-card__img" />
-              )}
+              <img
+                src={
+                  pkg.thumbnail ??
+                  "https://upload.wikimedia.org/wikipedia/commons/1/14/No_Image_Available.jpg"
+                }
+                alt={pkg.title}
+                className="sb-card__img"
+              />
               <div className="sb-card__body">
                 <h3 className="sb-card__title">{pkg.title}</h3>
                 <p className="sb-card__excerpt">{pkg.description}</p>
                 <p className="sb-card__price">
-                  {window.sbConfig.symbol}{pkg.price.toFixed(2)} flat
+                  {window.sbConfig.symbol}
+                  {pkg.price.toFixed(2)} flat
                   {pkg.space_name && ` · ${pkg.space_name}`}
                   {pkg.duration > 0 && ` · ${pkg.duration}h`}
                 </p>
-
               </div>
               {selectedPackage?.id === pkg.id && (
-                <span className="sb-card__check" aria-label="Selected">✓</span>
+                <span className="sb-card__check" aria-label="Selected">
+                  ✓
+                </span>
               )}
             </div>
           ))}

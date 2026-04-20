@@ -11,6 +11,12 @@ export interface Space {
   max_duration: number;
   capacity: number;
   day_overrides: Record<number, DayOverride>;
+  price_overrides: Array<{
+    days: number[];
+    start_time: string;
+    end_time: string;
+    hourly_rate: number;
+  }> | null;
   gallery: string[];
 }
 
@@ -63,7 +69,7 @@ export interface PriceBreakdownItem {
   label: string;
   amount: number;
   context?: {
-    type: 'space' | 'package' | 'extra' | 'segment' | 'modifier';
+    type: "space" | "package" | "extra" | "segment" | "modifier";
     name?: string;
     id?: number;
   };
@@ -134,4 +140,3 @@ export interface CustomerInfo {
   phone: string;
   notes: string;
 }
-
