@@ -99,6 +99,9 @@ final class Installer
 		dbDelta($sql_extras);
 		dbDelta($sql_pricing);
 
+		// Run migrations
+		(new \SpaceBooking\Migrations\AddExpiredAt())->run();
+
 		update_option('sb_db_version', SB_VERSION);
 	}
 
