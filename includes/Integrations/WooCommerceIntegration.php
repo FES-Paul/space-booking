@@ -21,6 +21,13 @@ final class WooCommerceIntegration
         add_action('woocommerce_checkout_order_processed', [self::class, 'save_order_meta'], 10, 3);
         add_action('woocommerce_payment_complete', [self::class, 'confirm_booking'], 10, 1);
         add_action('woocommerce_order_status_pending_to_processing', [self::class, 'confirm_booking'], 10, 1);
+        add_action('woocommerce_order_status_processing', [self::class, 'confirm_booking'], 10, 1);
+        add_action('woocommerce_order_status_on-hold', [self::class, 'confirm_booking'], 10, 1);
+        add_action('woocommerce_order_status_completed', [self::class, 'confirm_booking'], 10, 1);
+        add_action('woocommerce_thankyou', [self::class, 'handle_thankyou_redirect'], 10, 1);
+
+        // Line item meta backup
+        \SpaceBooking\Services\WooCommerceService::register_hooks();
     }
 
     public static function populate_pending_cart(): void
@@ -111,14 +118,57 @@ final class WooCommerceIntegration
      */
     public static function save_order_meta($order_id, $posted_data, $order)
     {
-        // Cart item data has sb_booking_id from WooCommerceService::add_booking_to_cart
+        error_log('SpaceBooking WC: save_order_meta called for order #' . $order_id);
+
+        // Direct check session/transient for recent booking
+        $session_booking = WC()->session ? WC()->session->get('sb_pending_booking_id') : null;
+        if ($session_booking) {
+            $order->update_meta_data('_sb_booking_id', $session_booking);
+            $order->save_meta_data();
+            error_log('SpaceBooking WC: Saved session booking_id ' . $session_booking . ' to order #' . $order_id);
+            WC()->session->set('sb_pending_booking_id', null);
+            return;
+        }
+
+        // Fallback existing meta
+        $existing_booking_id = $order->get_meta('_sb_booking_id');
+        if ($existing_booking_id) {
+            error_log('SpaceBooking WC: Booking ID already in order meta: ' . $existing_booking_id);
+            return;
+        }
+
+        // Loop line items
         foreach ($order->get_items() as $item) {
-            $cart_item_data = $item->get_data();
-            if (isset($cart_item_data['sb_booking_id'])) {
-                $order->update_meta_data('_sb_booking_id', $cart_item_data['sb_booking_id']);
+            $booking_id = wc_get_order_item_meta($item->get_id(), 'sb_booking_id', true);
+            if ($booking_id) {
+                $order->update_meta_data('_sb_booking_id', $booking_id);
                 $order->save_meta_data();
-                break;
+                error_log('SpaceBooking WC: Saved from line item booking_id ' . $booking_id . ' to order #' . $order_id);
+                return;
             }
+        }
+        error_log('SpaceBooking WC: No booking_id found in order #' . $order_id);
+    }
+
+    /**
+     * Handle WooCommerce "Thank You" page - redirect to confirmation if booking confirmed.
+     */
+    public static function handle_thankyou_redirect($order_id)
+    {
+        $order = wc_get_order($order_id);
+        if (!$order)
+            return;
+
+        $booking_id = $order->get_meta('_sb_booking_id');
+        if (!$booking_id)
+            return;
+
+        $repo = new \SpaceBooking\Services\BookingRepository();
+        $booking = $repo->find((int) $booking_id);
+        if ($booking && $booking['status'] === 'confirmed') {
+            $confirmation_url = home_url('/booking-confirmation/?id=' . $booking_id . '&status=confirmed');
+            wp_redirect($confirmation_url);
+            exit;
         }
     }
 
@@ -127,21 +177,39 @@ final class WooCommerceIntegration
      */
     public static function confirm_booking($order_id)
     {
+        error_log('SpaceBooking WC: confirm_booking called for order #' . $order_id);
+
         $order = wc_get_order($order_id);
         if (!$order) {
+            error_log('SpaceBooking WC: Order not found #' . $order_id);
             return;
         }
 
         $booking_id = $order->get_meta('_sb_booking_id');
+        error_log('SpaceBooking WC: Order #' . $order_id . ' booking_id meta: ' . ($booking_id ?: 'MISSING'));
+
         if (!$booking_id) {
+            error_log('SpaceBooking WC: No _sb_booking_id meta on order #' . $order_id);
             return;
         }
 
-        $repo = new BookingRepository();
+        $repo = new \SpaceBooking\Services\BookingRepository();
         $booking = $repo->find((int) $booking_id);
-        if ($booking && $booking['status'] === 'pending') {
-            $repo->update_status($booking_id, 'confirmed');
-            (new \SpaceBooking\Services\EmailService())->send_confirmation($booking);
+        if (!$booking) {
+            error_log('SpaceBooking WC: Booking #' . $booking_id . ' not found');
+            return;
+        }
+
+        if ($booking['status'] === 'pending') {
+            $updated = $repo->update_status($booking_id, 'confirmed');
+            if ($updated) {
+                error_log('SpaceBooking WC: Booking #' . $booking_id . ' confirmed from order #' . $order_id);
+                (new \SpaceBooking\Services\EmailService())->send_confirmation($booking);
+            } else {
+                error_log('SpaceBooking WC: Failed to update status for booking #' . $booking_id);
+            }
+        } else {
+            error_log('SpaceBooking WC: Booking #' . $booking_id . ' already ' . $booking['status'] . ', skipping');
         }
     }
 }

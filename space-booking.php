@@ -61,5 +61,24 @@ add_action('plugins_loaded', static function (): void {
 	\SpaceBooking\Plugin::instance()->boot();
 });
 
+// ── Cron for cleaning expired bookings ────────────────────────────────
+add_action('sb_cleanup_expired_bookings', function () {
+	$repo = new \SpaceBooking\Services\BookingRepository();
+	$deleted = $repo->cleanup_expired();
+	error_log('SpaceBooking cron: Cleaned ' . $deleted . ' expired pending bookings');
+});
+
+// Schedule cron on activation
+register_activation_hook(__FILE__, function () {
+	if (!wp_next_scheduled('sb_cleanup_expired_bookings')) {
+		wp_schedule_event(time(), 'hourly', 'sb_cleanup_expired_bookings');
+	}
+});
+
+// Clear cron on deactivation
+register_deactivation_hook(__FILE__, function () {
+	wp_clear_scheduled_hook('sb_cleanup_expired_bookings');
+});
+
 register_activation_hook(__FILE__, [\SpaceBooking\Installer::class, 'activate']);
 register_deactivation_hook(__FILE__, [\SpaceBooking\Installer::class, 'deactivate']);

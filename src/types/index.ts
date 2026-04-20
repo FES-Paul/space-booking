@@ -134,9 +134,18 @@ export interface SelectedExtra {
 
 export type BookingStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
+export interface CustomField {
+  key: string;
+  label: string;
+  type: "text" | "email" | "tel" | "textarea" | "checkbox" | "radio" | "select";
+  required?: boolean;
+  placeholder?: string;
+  default?: string;
+  options?: string[];
+}
+
+export type CustomerValue = string | boolean | string[];
+
 export interface CustomerInfo {
-  name: string;
-  email: string;
-  phone: string;
-  notes: string;
+  [key: string]: CustomerValue;
 }

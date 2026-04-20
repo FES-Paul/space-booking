@@ -37,6 +37,19 @@ class AddExpiredAt
                 AFTER `status`
         ");
 
+        if ($result) {
+            // Backfill existing pending bookings
+            $backfilled = $wpdb->query("
+                UPDATE `{$table}` 
+                SET `{$column}` = DATE_ADD(COALESCE(created_at, NOW()), INTERVAL 30 MINUTE)
+                WHERE status = 'pending' 
+                  AND (`{$column}` IS NULL OR `{$column}` = '0000-00-00 00:00:00')
+            ");
+            if (false !== $backfilled) {
+                error_log("AddExpiredAt migration: Backfilled {$backfilled} pending bookings with expired_at.");
+            }
+        }
+
         return (bool) $result;
     }
 }

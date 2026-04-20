@@ -160,12 +160,21 @@ final class WooCommerceService
     }
 
     /**
-     * Get booking ID from cart item for order creation.
+     * WC Checkout: Save booking meta to order line items (backup to order meta)
      */
-    public static function save_booking_meta_to_order($item, $cart_item_key, $values, $order)
+    public static function save_booking_meta_to_order_line_item($item, $cart_item_key, $values, $order)
     {
         if (isset($values['sb_booking_id'])) {
-            $order->add_meta_data('_sb_booking_id', $values['sb_booking_id']);
+            $item->add_meta_data('sb_booking_id', $values['sb_booking_id']);
+            error_log('SpaceBooking WC: Saved sb_booking_id=' . $values['sb_booking_id'] . ' to line item');
         }
+    }
+
+    /**
+     * Hook registration helper
+     */
+    public static function register_hooks()
+    {
+        add_action('woocommerce_checkout_create_order_line_item', [self::class, 'save_booking_meta_to_order_line_item'], 10, 4);
     }
 }

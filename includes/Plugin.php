@@ -218,6 +218,7 @@ final class Plugin
 	}
 
 	// ── Admin ────────────────────────────────────────────────────────────────
+
 	private function register_admin(): void
 	{
 		if (!is_admin()) {
@@ -231,6 +232,31 @@ final class Plugin
 		// Export/Import AJAX
 		add_action('wp_ajax_sb_export_data', [$this, 'ajax_export_data']);
 		add_action('wp_ajax_sb_import_data', [$this, 'ajax_import_data']);
+
+		// Customer Fields AJAX
+		add_action('wp_ajax_sb_save_customer_fields', [$this, 'ajax_save_customer_fields']);
+	}
+
+	public function ajax_save_customer_fields(): void
+	{
+		check_ajax_referer('sb_export_import', '_wpnonce');
+		if (!current_user_can('manage_options')) {
+			wp_send_json_error('Unauthorized');
+		}
+
+		$fields_json = isset($_POST['fields']) ? sanitize_textarea_field(wp_unslash($_POST['fields'])) : '';
+		$fields = json_decode($fields_json, true);
+
+		if (JSON_ERROR_NONE !== json_last_error() || !is_array($fields)) {
+			wp_send_json_error('Invalid fields JSON');
+		}
+
+		$service = new \SpaceBooking\Services\CustomerFieldsService();
+		if ($service->save_fields($fields)) {
+			wp_send_json_success(['message' => 'Fields saved successfully']);
+		} else {
+			wp_send_json_error('Validation failed');
+		}
 	}
 
 	public function ajax_export_data(): void

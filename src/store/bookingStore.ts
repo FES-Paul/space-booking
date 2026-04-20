@@ -2,6 +2,8 @@ import { create } from "zustand";
 import type {
   BookingStep,
   CustomerInfo,
+  CustomField,
+  CustomerValue,
   Extra,
   Package,
   PriceBreakdownItem,
@@ -29,6 +31,7 @@ interface BookingState {
 
   // ── Step 4: Customer info ────────────────────────────────────────────────
   customerInfo: CustomerInfo;
+  customerFields: CustomField[];
 
   // ── Step 5: Checkout ─────────────────────────────────────────────────────
   checkoutUrl: string | null;
@@ -50,7 +53,10 @@ interface BookingState {
   setEndTime: (time: string) => void;
   setAvailableExtras: (extras: Extra[]) => void;
   toggleExtra: (extra_id: number, quantity?: number) => void;
-  setCustomerInfo: (info: Partial<CustomerInfo>) => void;
+  setCustomerField: (key: string, value: CustomerValue) => void;
+  setCustomerFields: (fields: CustomField[]) => void;
+  fetchCustomerFields: () => Promise<void>;
+  validateCustomerInfo: () => boolean;
   setCheckoutData: (data: {
     checkoutUrl: string;
     bookingId: number;
@@ -60,14 +66,10 @@ interface BookingState {
   setPriceBreakdown: (breakdown: PriceBreakdownItem[], total: number) => void;
   confirmBooking: () => void;
   reset: () => void;
+  setBookingPolicy: (policy: string) => void;
 }
 
-const DEFAULT_CUSTOMER: CustomerInfo = {
-  name: "",
-  email: "",
-  phone: "",
-  notes: "",
-};
+const DEFAULT_CUSTOMER: CustomerInfo = {};
 
 export const useBookingStore = create<BookingState>((set, get) => ({
   // ── Initial state ────────────────────────────────────────────────────────
@@ -81,6 +83,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
   availableExtras: [],
   selectedExtras: [],
   customerInfo: { ...DEFAULT_CUSTOMER },
+  customerFields: [],
   checkoutUrl: null,
   bookingId: null,
   totalPrice: 0,
@@ -131,8 +134,81 @@ export const useBookingStore = create<BookingState>((set, get) => ({
   },
 
   // ── Step 4 ───────────────────────────────────────────────────────────────
-  setCustomerInfo: (info) =>
-    set((s) => ({ customerInfo: { ...s.customerInfo, ...info } })),
+  setCustomerField: (key: string, value: CustomerValue) =>
+    set((s) => ({
+      customerInfo: { ...s.customerInfo, [key]: value as CustomerValue },
+    })),
+  setCustomerFields: (fields: CustomField[]) => set({ customerFields: fields }),
+  fetchCustomerFields: async () => {
+    try {
+      const res = await fetch(`${window.sbConfig.apiBase}/customer/fields/`, {
+        headers: { "X-WP-Nonce": window.sbConfig.nonce },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      console.log("Customer fields:", data);
+      if (data.fields && Array.isArray(data.fields) && data.fields.length > 0) {
+        set({ customerFields: data.fields });
+        data.fields.forEach((f: CustomField) => {
+          if (f.default !== undefined && f.default !== "") {
+            set((state) => ({
+              customerInfo: {
+                ...state.customerInfo,
+                [f.key]: f.default as CustomerValue,
+              },
+            }));
+          }
+        });
+      } else {
+        console.warn("Empty fields response, using defaults");
+        const defaults: CustomField[] = [
+          { key: "name", label: "Full Name", type: "text", required: true },
+          {
+            key: "email",
+            label: "Email Address",
+            type: "email",
+            required: true,
+          },
+          { key: "phone", label: "Phone", type: "tel", required: false },
+          {
+            key: "notes",
+            label: "Special Requests",
+            type: "textarea",
+            required: false,
+          },
+        ];
+        set({ customerFields: defaults });
+      }
+    } catch (e) {
+      console.error("Fetch customer fields failed:", e);
+      const defaults: CustomField[] = [
+        { key: "name", label: "Full Name", type: "text", required: true },
+        { key: "email", label: "Email Address", type: "email", required: true },
+        { key: "phone", label: "Phone", type: "tel", required: false },
+        {
+          key: "notes",
+          label: "Special Requests",
+          type: "textarea",
+          required: false,
+        },
+      ];
+      set({ customerFields: defaults });
+    }
+  },
+  validateCustomerInfo: (): boolean => {
+    const { customerFields, customerInfo } = get();
+    return customerFields.every((f) => {
+      if (!f.required) return true;
+      const val = customerInfo[f.key];
+      if (val === "" || val === undefined || val === null) return false;
+      if (
+        f.type === "email" &&
+        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val as string)
+      )
+        return false;
+      return true;
+    });
+  },
 
   // ── Step 5 ───────────────────────────────────────────────────────────────
   setCheckoutData: ({ checkoutUrl, bookingId, totalPrice, breakdown }) =>

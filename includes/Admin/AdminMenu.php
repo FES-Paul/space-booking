@@ -277,8 +277,7 @@ final class AdminMenu
 	{
 ?>
 <div class="wrap">
-    <h1><?php esc_html_e('Tools - Export/Import Data', 'space-booking'); ?></h1>
-    <?php include SB_DIR . 'templates/admin/page-export-import.php'; ?>
+    <?php include SB_DIR . 'templates/admin/page-tools.php'; ?>
 </div>
 <?php
 	}
