@@ -289,6 +289,11 @@
         display: block;
     }
 
+    .sb-field-col {
+        display: flex;
+        flex-direction: column;
+    }
+
     #sb-import-status {
         margin-top: 20px;
         padding: 10px;
@@ -325,7 +330,7 @@
         display: block;
     }
 
-    #sb-customize-fields input,
+    #sb-customize-fields input:not([type="checkbox"]),
     #sb-customize-fields select,
     #sb-customize-fields textarea {
         width: 100%;

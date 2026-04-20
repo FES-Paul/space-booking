@@ -38,15 +38,24 @@ export function Step2Scheduling() {
     return `${hour}:${minutes} ${period}`;
   };
 
-  // Auto-set default 1h end time when start changes (start slot's own end)
-  useEffect(() => {
-    if (!selectedStartTime || slots.length === 0) return;
+  const minDuration = selectedSpace?.min_duration ?? 1;
+  const maxDuration = selectedSpace?.max_duration ?? 8;
 
-    const startSlot = slots.find((s) => s.start === selectedStartTime);
-    if (startSlot) {
-      setEndTime(startSlot.end);
+  const isStartValid = (slotIndex: number): boolean => {
+    if (slotIndex + minDuration > slots.length) return false;
+    for (let k = 0; k < minDuration; k++) {
+      if (!slots[slotIndex + k].available) return false;
     }
-  }, [selectedStartTime]);
+    return true;
+  };
+
+  // Auto-set first valid end time (>= minDuration) when start changes
+  useEffect(() => {
+    const firstValidEnd = getFirstValidEnd();
+    if (firstValidEnd) {
+      setEndTime(firstValidEnd);
+    }
+  }, [selectedStartTime, slots, minDuration]);
 
   // Minimum selectable date = today
   const today = new Date().toISOString().split("T")[0];
@@ -61,11 +70,16 @@ export function Step2Scheduling() {
       .finally(() => setLoading(false));
   }, [selectedDate, spaceId]);
 
-  // Sequential available post-start slots (buffer-trusting)
+  // Sequential available end slots starting from minDuration (excluding default)
   const endTimeOptions: TimeSlot[] = [];
   const startIndex = slots.findIndex((s) => s.start === selectedStartTime);
   if (startIndex >= 0) {
-    for (let j = startIndex + 1; j < slots.length && j < startIndex + 8; j++) {
+    const minEndIndex = startIndex + minDuration;
+    for (
+      let j = minEndIndex + 1; // +1 to skip default minDuration slot
+      j < slots.length && j < startIndex + maxDuration + 1;
+      j++
+    ) {
       if (!slots[j].available) break;
       endTimeOptions.push(slots[j]);
     }
@@ -73,8 +87,13 @@ export function Step2Scheduling() {
 
   const canProceed = selectedDate && selectedStartTime && selectedEndTime;
 
-  const minDuration = selectedSpace?.min_duration ?? 1;
-  const maxDuration = selectedSpace?.max_duration ?? 8;
+  // Compute first valid end slot based on minDuration
+  const getFirstValidEnd = (): string => {
+    const startIdx = slots.findIndex((s) => s.start === selectedStartTime);
+    if (startIdx < 0 || startIdx + minDuration > slots.length) return "";
+    const candidate = slots[startIdx + minDuration - 1];
+    return candidate?.available ? candidate.end : "";
+  };
 
   return (
     <div className="sb-step sb-step-2">
@@ -104,16 +123,21 @@ export function Step2Scheduling() {
           <div className="sb-field">
             <label className="sb-label">Start Time</label>
             <div className="sb-slot-grid">
-              {slots.map((slot) => (
-                <button
-                  key={slot.start}
-                  disabled={!slot.available}
-                  className={`sb-slot ${selectedStartTime === slot.start ? "sb-slot--selected" : ""} ${!slot.available ? "sb-slot--taken" : ""}`}
-                  onClick={() => slot.available && setStartTime(slot.start)}
-                >
-                  {formatTimeTo12Hour(slot.start)}
-                </button>
-              ))}
+              {slots
+                .map((slot, i) => {
+                  const validStart = slot.available && isStartValid(i);
+                  if (!validStart) return null;
+                  return (
+                    <button
+                      key={slot.start}
+                      className={`sb-slot ${selectedStartTime === slot.start ? "sb-slot--selected" : ""}`}
+                      onClick={() => setStartTime(slot.start)}
+                    >
+                      {formatTimeTo12Hour(slot.start)}
+                    </button>
+                  );
+                })
+                .filter(Boolean)}
             </div>
           </div>
 
@@ -129,18 +153,11 @@ export function Step2Scheduling() {
                 value={selectedEndTime}
                 onChange={(e) => setEndTime(e.target.value)}
               >
-                <option
-                  value={
-                    slots.find((s) => s.start === selectedStartTime)?.end || ""
-                  }
-                >
-                  1h (
-                  {formatTimeTo12Hour(
-                    slots.find((s) => s.start === selectedStartTime)?.end ||
-                      "...",
-                  )}
-                  )
-                </option>
+                {getFirstValidEnd() && (
+                  <option key="default" value={getFirstValidEnd()}>
+                    {minDuration}h ({formatTimeTo12Hour(getFirstValidEnd())})
+                  </option>
+                )}
                 {endTimeOptions.map((slot, i) => {
                   const hours = Math.round(
                     (timeToMinutes(slot.end) -

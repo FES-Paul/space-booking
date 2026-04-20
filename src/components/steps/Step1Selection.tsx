@@ -83,6 +83,7 @@ export function Step1Selection() {
                     Regular: {window.sbConfig.symbol}
                     {space.hourly_rate.toFixed(2)} / hr
                   </div>
+                  <div>Min: {space.min_duration}h booking</div>
                   {space.capacity > 0 && (
                     <div>Up to {space.capacity} guests</div>
                   )}
