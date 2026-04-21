@@ -7,9 +7,13 @@
 if (!defined('ABSPATH'))
     exit;
 
+// Debug log
+error_log('SpaceBooking Confirmation Page Loaded: id=' . ($_GET['id'] ?? 'none') . ' status=' . ($_GET['status'] ?? 'none'));
+
 global $wp_query;
 $booking_id = intval(get_query_var('booking_id') ?? $_GET['id'] ?? 0);
 $status = sanitize_text_field(get_query_var('status') ?? $_GET['status'] ?? '');
+error_log('Parsed: booking_id=' . $booking_id . ' status=' . $status);
 
 // Fetch booking if provided
 $booking = null;
@@ -17,7 +21,7 @@ if ($booking_id) {
     $repo = new \SpaceBooking\Services\BookingRepository();
     $booking = $repo->find($booking_id);
     if ($booking) {
-        wp_localize_script('space-booking-app', 'sbConfirmationData', [
+        wp_localize_script('space-booking-confirmation', 'sbConfirmationData', [
             'bookingId' => $booking_id,
             'status' => $booking['status'],
             'spaceId' => $booking['space_id'],
@@ -34,14 +38,12 @@ get_header();
 </div>
 
 <script type="module">
-// Load BookingApp with confirmation step
-import('/wp-content/plugins/space-booking/assets/js/booking-app.js')
+window.sbConfig = window.sbConfig || {};
+// Load confirmation-main.tsx
+import(window.sbConfig.viteBase + '/src/confirmation-main.tsx?' + Date.now())
+    .catch(() => import('/wp-content/plugins/space-booking/assets/js/booking-app.js'))
     .then(() => {
-        const app = document.getElementById('sb-confirmation-app');
-        if (app && window.sbConfig) {
-            app.innerHTML = '<div id="sb-booking-app"></div>';
-            // Trigger step 7 via store or query
-        }
+        // confirmation-main.tsx auto-mounts to #sb-confirmation-app
     });
 </script>
 

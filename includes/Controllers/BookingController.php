@@ -49,6 +49,29 @@ final class BookingController extends WP_REST_Controller
 				'callback' => [$this, 'get_booking'],
 				'permission_callback' => '__return_true',
 			],
+			[
+				'methods' => WP_REST_Server::READABLE,
+				'callback' => [$this, 'get_booking_status'],
+				'permission_callback' => '__return_true',
+			],
+		]);
+	}
+
+	// ── Get Booking Status ────────────────────────────────────────────────────
+
+	public function get_booking_status(WP_REST_Request $request): WP_REST_Response
+	{
+		$id = (int) $request->get_param('id');
+		$booking = $this->repo->find($id);
+
+		if (!$booking) {
+			return new WP_REST_Response(['message' => 'Booking not found.'], 404);
+		}
+
+		return rest_ensure_response([
+			'id' => $booking['id'],
+			'status' => $booking['status'],
+			'booking' => $booking
 		]);
 	}
 

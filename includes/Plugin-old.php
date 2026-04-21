@@ -12,6 +12,7 @@ use SpaceBooking\Controllers\CartController;
 use SpaceBooking\Controllers\CustomerController;
 use SpaceBooking\Controllers\PricingController;
 use SpaceBooking\Controllers\SpaceController;
+use SpaceBooking\Controllers\WebhookController;
 use SpaceBooking\CPT\ExtraCPT;
 use SpaceBooking\CPT\PackageCPT;
 use SpaceBooking\CPT\SpaceCPT;
@@ -36,7 +37,7 @@ final class Plugin
     public function boot(): void
     {
         $this->register_rest_api();
-        $this->register_wc_hooks();
+        // $this->register_wc_hooks();
         $this->enqueue_assets();
         $this->register_admin();
 
@@ -45,7 +46,7 @@ final class Plugin
         }
     }
 
-    public function init_boot(): void
+    private function init_boot(): void
     {
         $this->load_textdomain();
         $this->register_cpts();

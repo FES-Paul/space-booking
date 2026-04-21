@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { useBookingStore } from "@/store/bookingStore";
-import { fetchSpace, fetchPackages } from "@/utils/api";
+import { fetchSpace, fetchPackages, checkCartHasBooking } from "@/utils/api";
 import { StepProgress } from "./shared/StepProgress";
 import { Step1Selection } from "./steps/Step1Selection";
 import { Step2Scheduling } from "./steps/Step2Scheduling";
@@ -17,8 +17,35 @@ interface Props {
 }
 
 export function BookingApp({ preSpaceId, prePackageId }: Props) {
-  const { setSpace, setPackage, setStep } = useBookingStore();
+  const { setSpace, setPackage, setStep, bookingId } = useBookingStore();
   const currentStep = useBookingStore((s) => s.currentStep);
+
+  // Cart/session check + cleanup
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("step") === "7" && bookingId) {
+      return; // Direct confirmation
+    }
+
+    const initCartCheck = async () => {
+      try {
+        const res = await checkCartHasBooking();
+        if (res.hasCartBooking) {
+          window.location.href = "/checkout/";
+          return;
+        } else {
+          // Cart empty → clear persisted state
+          useBookingStore.getState().clearPersistedState();
+        }
+      } catch (e) {
+        console.error("Cart check on app init failed:", e);
+        // Assume empty on error → clear state
+        useBookingStore.getState().clearPersistedState();
+      }
+    };
+
+    initCartCheck();
+  }, []);
 
   // Pre-select space or package from shortcode attributes
   useEffect(() => {

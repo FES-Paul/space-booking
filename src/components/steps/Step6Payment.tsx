@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useBookingStore } from "@/store/bookingStore";
-import { createBooking } from "@/utils/api";
+import { createBooking, checkCartHasBooking } from "@/utils/api";
 
 export function Step6Payment() {
   const {
@@ -16,12 +16,29 @@ export function Step6Payment() {
     selectedExtras,
     availableExtras,
     prevStep,
+    hasCartBooking,
+    checkCartBooking,
   } = useBookingStore();
 
   const [loading, setLoading] = useState(false);
+  const [checkingCart, setCheckingCart] = useState(true);
   const [error, setError] = useState("");
 
   const handlePayment = async () => {
+    // If existing checkout or cart booking, redirect immediately
+    if (checkoutUrl) {
+      window.location.href = checkoutUrl;
+      return;
+    }
+
+    if (hasCartBooking) {
+      // Fetch fresh checkout URL since cart exists but no stored URL
+      const freshCheckoutUrl = "/checkout/";
+      window.location.href = freshCheckoutUrl;
+      return;
+    }
+
+    // Normal flow: create new booking
     const spaceId = selectedSpace?.id ?? selectedPackage?.space_id;
     const packageId = selectedPackage?.id;
 
@@ -40,10 +57,10 @@ export function Step6Payment() {
         date: selectedDate,
         start_time: selectedStartTime,
         end_time: selectedEndTime,
-        customer_name: customerInfo.name,
-        customer_email: customerInfo.email,
-        customer_phone: customerInfo.phone,
-        notes: customerInfo.notes,
+        customer_name: String(customerInfo.name || ""),
+        customer_email: String(customerInfo.email || ""),
+        customer_phone: String(customerInfo.phone || ""),
+        notes: String(customerInfo.notes || ""),
         extras: selectedExtras,
       });
 
@@ -63,6 +80,22 @@ export function Step6Payment() {
       setLoading(false);
     }
   };
+
+  // Check cart on component mount
+  useEffect(() => {
+    const checkCart = async () => {
+      if (!checkoutUrl && !hasCartBooking) {
+        try {
+          await checkCartBooking();
+        } catch (e) {
+          console.error("Cart check failed:", e);
+        }
+      }
+      setCheckingCart(false);
+    };
+
+    checkCart();
+  }, [checkoutUrl, hasCartBooking, checkCartBooking]);
 
   return (
     <div className="sb-step sb-step-6">
@@ -124,13 +157,15 @@ export function Step6Payment() {
           <button
             className="sb-btn sb-btn--primary"
             onClick={handlePayment}
-            disabled={loading || !!checkoutUrl}
+            disabled={loading || checkingCart}
           >
-            {loading
-              ? "Creating Booking..."
-              : checkoutUrl
-                ? "Redirecting..."
-                : "Proceed to Secure Payment →"}
+            {checkingCart
+              ? "Checking cart..."
+              : loading
+                ? "Creating Booking..."
+                : checkoutUrl || hasCartBooking
+                  ? "Continue with Payment →"
+                  : "Proceed to Secure Payment →"}
           </button>
         </div>
 

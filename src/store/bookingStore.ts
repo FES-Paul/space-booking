@@ -28,6 +28,7 @@ interface BookingState {
   customerFields: CustomField[];
   checkoutUrl: string | null;
   bookingId: number | null;
+  bookingStatus: "pending" | "confirmed" | "error";
   totalPrice: number;
   priceBreakdown: PriceBreakdownItem[];
   isConfirmed: boolean;
@@ -55,6 +56,8 @@ interface BookingState {
   setPriceBreakdown: (breakdown: PriceBreakdownItem[], total: number) => void;
   confirmBooking: () => void;
   checkCartBooking: () => Promise<void>;
+  loadBookingStatus: (id: number) => Promise<void>;
+  setBookingStatus: (status: "pending" | "confirmed" | "error") => void;
   clearPersistedState: () => void;
   setHasCartBooking: (has: boolean) => void;
   reset: () => void;
@@ -80,6 +83,7 @@ export const useBookingStore = create<BookingState>()(
       customerFields: [],
       checkoutUrl: null,
       bookingId: null,
+      bookingStatus: "pending",
       totalPrice: 0,
       priceBreakdown: [],
       isConfirmed: false,
@@ -295,6 +299,38 @@ export const useBookingStore = create<BookingState>()(
       clearPersistedState: () => localStorage.removeItem("sb-booking-state"),
       setHasCartBooking: (has: boolean) => set({ hasCartBooking: has }),
 
+      // ── Booking Status ───────────────────────────────────────────────────────
+      loadBookingStatus: async (id: number) => {
+        try {
+          const res = await fetch(`${window.sbConfig.apiBase}/bookings/${id}`);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          const status = data.status || data.booking?.status || "error";
+          set({ bookingStatus: status as "pending" | "confirmed" | "error" });
+          if (data.booking) {
+            // Populate store from booking data if needed
+            const b = data.booking;
+            set({
+              selectedDate: b.booking_date || "",
+              selectedStartTime: b.start_time || "",
+              selectedEndTime: b.end_time || "",
+              totalPrice: parseFloat(b.total_price || "0"),
+              customerInfo: {
+                name: b.customer_name || "",
+                email: b.customer_email || "",
+                phone: b.customer_phone || "",
+              },
+            });
+          }
+        } catch (e) {
+          console.error("loadBookingStatus failed:", e);
+          set({ bookingStatus: "error" });
+        }
+      },
+
+      setBookingStatus: (status: "pending" | "confirmed" | "error") =>
+        set({ bookingStatus: status }),
+
       reset: () => {
         get().clearPersistedState();
         set({
@@ -310,6 +346,7 @@ export const useBookingStore = create<BookingState>()(
           customerInfo: { ...DEFAULT_CUSTOMER },
           checkoutUrl: null,
           bookingId: null,
+          bookingStatus: "pending",
           totalPrice: 0,
           priceBreakdown: [],
           isConfirmed: false,

@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useBookingStore } from "@/store/bookingStore";
 
 export function Step7Confirmation() {
+  const bookingStatus = useBookingStore((s) => s.bookingStatus);
   const {
     customerInfo,
     selectedSpace,
@@ -29,17 +30,28 @@ export function Step7Confirmation() {
         <span className="sb-confirm-icon" aria-hidden="true">
           ✅
         </span>
-        <h2 className="sb-confirm-title">Booking Created!</h2>
+        <h2 className="sb-confirm-title">
+          {bookingStatus === "confirmed"
+            ? "Payment Confirmed!"
+            : "Booking Created!"}
+        </h2>
         <p className="sb-confirm-subtitle">
-          You're being redirected to secure payment. A confirmation email will
-          be sent after payment.
+          {bookingStatus === "confirmed"
+            ? "Payment successful! A human will review this booking to ensure total accuracy. You can expect a confirmation update from a member of our staff within 24 hours."
+            : "You're being redirected to secure payment. A confirmation email will be sent after payment."}
         </p>
       </div>
 
       {/* Invoice card */}
       <div className="sb-invoice">
         <div className="sb-invoice__header">
-          <h3>Booking Receipt (Pending Payment)</h3>
+          <h3>
+            Booking Receipt (
+            {bookingStatus === "confirmed"
+              ? "Paid - Under Review"
+              : "Pending Payment"}
+            )
+          </h3>
           {bookingId && <span className="sb-invoice__id">#{bookingId}</span>}
         </div>
 
@@ -89,7 +101,9 @@ export function Step7Confirmation() {
               </tr>
             )}
             <tr className="sb-invoice__total">
-              <th>Total Due</th>
+              <th>
+                {bookingStatus === "confirmed" ? "Total Paid" : "Total Due"}
+              </th>
               <td>
                 {totalPrice.toFixed(2)} {window.sbConfig.symbol}
               </td>
@@ -108,8 +122,25 @@ export function Step7Confirmation() {
         </button>
       </div>
 
+      {bookingStatus === "confirmed" && (
+        <div
+          className="sb-review-notice"
+          style={{
+            background: "#d4edda",
+            padding: "15px",
+            borderRadius: "8px",
+            margin: "20px 0",
+            borderLeft: "4px solid #28a745",
+          }}
+        >
+          <strong>📋 Next Steps:</strong> Our team will review your booking
+          within 24 hours and send final confirmation.
+        </div>
+      )}
       <p className="sb-confirm-lookup">
-        You'll receive confirmation after payment. Manage bookings via{" "}
+        {bookingStatus === "confirmed"
+          ? "Booking confirmed and under review. Manage via "
+          : "You'll receive confirmation after payment. Manage bookings via "}
         <a href="/booking-lookup/">booking lookup</a> with your email.
       </p>
     </div>

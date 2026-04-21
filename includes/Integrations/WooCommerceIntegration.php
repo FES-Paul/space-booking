@@ -24,10 +24,72 @@ final class WooCommerceIntegration
         add_action('woocommerce_order_status_processing', [self::class, 'confirm_booking'], 10, 1);
         add_action('woocommerce_order_status_on-hold', [self::class, 'confirm_booking'], 10, 1);
         add_action('woocommerce_order_status_completed', [self::class, 'confirm_booking'], 10, 1);
-        add_action('woocommerce_thankyou', [self::class, 'handle_thankyou_redirect'], 10, 1);
+        // Late redirect check after all payment hooks
+        add_action('wp_footer', [self::class, 'late_redirect_check'], 9999);
 
         // Line item meta backup
         \SpaceBooking\Services\WooCommerceService::register_hooks();
+
+        // GUARANTEED order meta save after checkout processing
+        add_action('woocommerce_checkout_update_order_meta', [self::class, 'save_booking_meta_guaranteed'], 10, 1);
+    }
+
+    /**
+     * Guaranteed booking ID save after order is fully saved
+     */
+    public static function save_booking_meta_guaranteed($order_id): void
+    {
+        $order = wc_get_order($order_id);
+        if (!$order || $order->get_meta('_sb_booking_id')) {
+            return;
+        }
+
+        // Check line items (same logic as save_order_meta)
+        foreach ($order->get_items() as $item) {
+            $booking_id = $item->get_meta('sb_booking_id', true);
+            if ($booking_id) {
+                $order->update_meta_data('_sb_booking_id', $booking_id);
+                $order->save();
+                error_log('SpaceBooking WC: GUARANTEED save booking_id ' . $booking_id . ' to order #' . $order_id);
+                return;
+            }
+        }
+    }
+
+    /**
+     * Late check for confirmed booking on order-received pages
+     */
+    public static function late_redirect_check(): void
+    {
+        if (!is_wc_endpoint_url('order-received')) {
+            return;
+        }
+
+        global $wp_query;
+        $order_id = get_query_var('order-received');
+        if (!$order_id || !is_numeric($order_id)) {
+            return;
+        }
+
+        $order = wc_get_order((int) $order_id);
+        if (!$order) {
+            return;
+        }
+
+        $booking_id = $order->get_meta('_sb_booking_id');
+        if (!$booking_id) {
+            error_log('SpaceBooking WC late_redirect: No booking_id in order #' . $order_id);
+            return;
+        }
+
+        $repo = new \SpaceBooking\Services\BookingRepository();
+        $booking = $repo->find((int) $booking_id);
+        if ($booking && $booking['status'] === 'confirmed') {
+            $confirmation_url = home_url('/booking-confirmation/?id=' . $booking_id . '&status=confirmed');
+            error_log('SpaceBooking WC late_redirect: Redirecting order #' . $order_id . ' → ' . $confirmation_url);
+            wp_redirect($confirmation_url);
+            exit;
+        }
     }
 
     public static function populate_pending_cart(): void
@@ -124,7 +186,7 @@ final class WooCommerceIntegration
         $session_booking = WC()->session ? WC()->session->get('sb_pending_booking_id') : null;
         if ($session_booking) {
             $order->update_meta_data('_sb_booking_id', $session_booking);
-            $order->save_meta_data();
+            $order->save();
             error_log('SpaceBooking WC: Saved session booking_id ' . $session_booking . ' to order #' . $order_id);
             WC()->session->set('sb_pending_booking_id', null);
             return;
@@ -137,16 +199,32 @@ final class WooCommerceIntegration
             return;
         }
 
-        // Loop line items
+        // Loop ALL line items (including fees, shipping, etc.)
         foreach ($order->get_items() as $item) {
-            $booking_id = wc_get_order_item_meta($item->get_id(), 'sb_booking_id', true);
+            $booking_id = $item->get_meta('sb_booking_id', true);
             if ($booking_id) {
                 $order->update_meta_data('_sb_booking_id', $booking_id);
-                $order->save_meta_data();
+                $order->save();
                 error_log('SpaceBooking WC: Saved from line item booking_id ' . $booking_id . ' to order #' . $order_id);
                 return;
             }
         }
+
+        // Fallback: check order TAXABLE line item meta directly
+        $order_items = $order->get_items('line_item');
+        foreach ($order_items as $item_id => $item) {
+            $item_meta = $item->get_meta_data();
+            foreach ($item_meta as $meta) {
+                if ($meta->key === 'sb_booking_id') {
+                    $booking_id = $meta->value;
+                    $order->update_meta_data('_sb_booking_id', $booking_id);
+                    $order->save();
+                    error_log('SpaceBooking WC: Saved from TAXABLE line item meta booking_id ' . $booking_id . ' to order #' . $order_id);
+                    return;
+                }
+            }
+        }
+
         error_log('SpaceBooking WC: No booking_id found in order #' . $order_id);
     }
 
