@@ -172,6 +172,140 @@
         });
 
         // Fields JS (from page-bookings.php)
+        // Drag & Drop functionality
+        let draggedRow = null;
+        const repeater = document.getElementById('sb-fields-repeater');
+
+        // Drag start on handle - SIMPLIFIED jQuery only, no native draggable
+        $(document).on('mousedown', '.sb-drag-handle', function(e) {
+            draggedRow = this.closest('.sb-field-row');
+            $(draggedRow).addClass('sb-dragging');
+
+            // Clone for smooth dragging
+            const ghost = draggedRow.cloneNode(true);
+            ghost.classList.add('sb-drag-ghost');
+            ghost.style.position = 'absolute';
+            ghost.style.zIndex = '10000';
+            ghost.style.opacity = '0.8';
+            ghost.style.pointerEvents = 'none';
+            ghost.style.width = draggedRow.offsetWidth + 'px';
+            document.body.appendChild(ghost);
+
+            let lastMouseX = e.clientX;
+            let lastMouseY = e.clientY;
+
+            const moveHandler = (me) => {
+                const deltaX = me.clientX - lastMouseX;
+                const deltaY = me.clientY - lastMouseY;
+                const rect = ghost.getBoundingClientRect();
+                ghost.style.left = rect.left + deltaX + 'px';
+                ghost.style.top = rect.top + deltaY + 'px';
+                lastMouseX = me.clientX;
+                lastMouseY = me.clientY;
+            };
+
+            const upHandler = () => {
+                document.removeEventListener('mousemove', moveHandler);
+                document.removeEventListener('mouseup', upHandler);
+                ghost.remove();
+
+                // Find drop target
+                const dropTarget = document.elementFromPoint(e.clientX, e.clientY)?.closest(
+                    '.sb-field-row');
+                if (dropTarget && dropTarget !== draggedRow) {
+                    if (dropTarget.querySelector('.sb-drag-handle')) {
+                        dropTarget.parentNode.insertBefore(draggedRow, dropTarget);
+                    } else {
+                        dropTarget.parentNode.insertBefore(draggedRow, dropTarget.nextSibling);
+                    }
+                    updateFieldIndexes();
+                    updatePreviewFromDOM();
+                }
+
+                $(draggedRow)?.removeClass('sb-dragging');
+                draggedRow = null;
+            };
+
+            document.addEventListener('mousemove', moveHandler);
+            document.addEventListener('mouseup', upHandler);
+            e.preventDefault();
+            return false;
+        });
+
+        // Drop & reorder
+        repeater.addEventListener('drop', function(e) {
+            e.preventDefault();
+            const dropTarget = e.target.closest('.sb-field-row');
+            if (dropTarget && dropTarget !== draggedRow) {
+                if ($(e.target).hasClass('sb-drag-handle') || $(e.target).closest('.sb-drag-handle')
+                    .length) {
+                    $(dropTarget).before(draggedRow);
+                } else {
+                    $(dropTarget).after(draggedRow);
+                }
+                updateFieldIndexes();
+                updatePreviewFromDOM();
+            }
+            cleanupDrag();
+        });
+
+        // Touch support for mobile
+        let touchStartY = 0;
+        $(document).on('touchstart', '.sb-drag-handle', function(e) {
+            touchStartY = e.originalEvent.touches[0].clientY;
+        });
+
+        $(document).on('touchmove', '.sb-drag-handle', function(e) {
+            if (Math.abs(e.originalEvent.touches[0].clientY - touchStartY) > 10) {
+                // Long press to drag (simplified)
+                setTimeout(() => {
+                    draggedRow = this.closest('.sb-field-row');
+                    $(draggedRow).addClass('sb-dragging');
+                }, 500);
+            }
+        });
+
+        // Helper functions
+        function updateFieldIndexes() {
+            $('#sb-fields-repeater .sb-field-row').each(function(i) {
+                $(this).attr('data-index', i);
+                $(this).find('input, select, textarea').each(function() {
+                    let name = $(this).attr('name');
+                    if (name) {
+                        name = name.replace(/\[(\d+)\]/, `[${i}]`);
+                        $(this).attr('name', name);
+                    }
+                });
+            });
+        }
+
+        function updatePreviewFromDOM() {
+            const fieldsData = [];
+            $('#sb-fields-repeater .sb-field-row').each(function() {
+                const row = $(this);
+                const field = {
+                    key: row.find('[name*="[key]"]').val(),
+                    label: row.find('[name*="[label]"]').val(),
+                    type: row.find('[name*="[type]"]').val(),
+                    required: row.find('[name*="[required]"]').is(':checked'),
+                    placeholder: row.find('[name*="[placeholder]"]').val(),
+                    default: row.find('[name*="[default]"]').val(),
+                    options: row.find('[name*="[options]"]').val()
+                };
+                fieldsData.push(field);
+            });
+            updatePreview(fieldsData);
+        }
+
+        function cleanupDrag() {
+            $('.sb-field-row').removeClass('sb-dragging drag-over');
+            if (draggedRow) {
+                draggedRow.draggable = false;
+                draggedRow = null;
+            }
+        }
+
+        // Existing handlers with drag integration
         $('#sb-add-field').on('click', function() {
             const newFieldHtml = `
                 <div class="sb-field-row" data-index="${fieldIndex}">
@@ -192,11 +326,17 @@
                 </div>`;
             $('#sb-fields-repeater').append(newFieldHtml);
             fieldIndex++;
+            updateFieldIndexes(); // NEW: Fix indexes after add
         });
+
         $(document).on('click', '.sb-remove-field', function() {
             $(this).closest('.sb-field-row').remove();
+            updateFieldIndexes(); // NEW: Fix indexes after remove
+            updatePreviewFromDOM();
         });
+
         $('#sb-save-fields').on('click', function() {
+            updateFieldIndexes(); // Ensure correct order
             const fieldsData = [];
             $('#sb-fields-repeater .sb-field-row').each(function() {
                 const row = $(this);
@@ -231,6 +371,9 @@
             });
         });
 
+        // Init indexes and preview
+        updateFieldIndexes();
+
         function updatePreview(fields) {
             let preview = '';
             fields.forEach(function(field) {
@@ -255,6 +398,9 @@
         <?php if (!empty($fields)): ?>
         updatePreview(<?php echo json_encode($fields); ?>);
         <?php endif; ?>
+
+        // Init drag & drop
+        updateFieldIndexes();
     });
     </script>
 
@@ -360,6 +506,19 @@
 
     #sb-customize-fields .sb-drag-handle:active {
         cursor: grabbing;
+    }
+
+    /* Drag & Drop Visual Feedback */
+    .sb-field-row.sb-dragging {
+        opacity: 0.7;
+        transform: rotate(3deg) scale(1.02);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        z-index: 1000;
+    }
+
+    .sb-field-row.drag-over {
+        border: 2px dashed #2271b1;
+        background: #e3f2fd;
     }
 
     #sb-customize-fields .required {

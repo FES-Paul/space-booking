@@ -358,87 +358,87 @@ defined('ABSPATH') || exit;
     </script>
 
     <!-- No customizer styles needed -->
-
+    <style>
     #sb-customize-fields label {
-    font-weight: 600;
-    font-size: 13px;
-    margin-bottom: 4px;
-    display: block;
+        font-weight: 600;
+        font-size: 13px;
+        margin-bottom: 4px;
+        display: block;
     }
 
     #sb-customize-fields input,
     #sb-customize-fields select,
     #sb-customize-fields textarea {
-    width: 100%;
-    padding: 6px;
-    border: 1px solid #ddd;
-    border-radius: 3px;
-    font-size: 13px;
+        width: 100%;
+        padding: 6px;
+        border: 1px solid #ddd;
+        border-radius: 3px;
+        font-size: 13px;
     }
 
     #sb-customize-fields .sb-field-col {
-    display: flex;
-    flex-direction: column;
+        display: flex;
+        flex-direction: column;
     }
 
     #sb-customize-fields .sb-field-actions {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 5px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 5px;
     }
 
     #sb-customize-fields .sb-drag-handle {
-    cursor: grab;
-    font-size: 20px;
-    user-select: none;
+        cursor: grab;
+        font-size: 20px;
+        user-select: none;
     }
 
     #sb-customize-fields .sb-drag-handle:active {
-    cursor: grabbing;
+        cursor: grabbing;
     }
 
     #sb-customize-fields .required {
-    color: #d63638;
+        color: #d63638;
     }
 
     #sb-customize-fields .sb-options-col small {
-    font-size: 11px;
-    color: #666;
+        font-size: 11px;
+        color: #666;
     }
 
     .sb-field-preview {
-    margin-bottom: 15px;
+        margin-bottom: 15px;
     }
 
     .sb-field-preview label {
-    font-weight: 600;
+        font-weight: 600;
     }
 
     .sb-field-preview input,
     .sb-field-preview textarea {
-    border: 1px solid #ccc;
-    padding: 8px;
-    border-radius: 4px;
+        border: 1px solid #ccc;
+        padding: 8px;
+        border-radius: 4px;
     }
 
     #sb-fields-status .error {
-    color: #d63638;
+        color: #d63638;
     }
 
     @media (max-width: 1200px) {
-    #sb-customize-fields .sb-field-row {
-    grid-template-columns: 1fr 1fr 1fr 1fr;
-    }
+        #sb-customize-fields .sb-field-row {
+            grid-template-columns: 1fr 1fr 1fr 1fr;
+        }
 
-    #sb-customize-fields .sb-options-col {
-    grid-column: 1 / -1;
-    }
+        #sb-customize-fields .sb-options-col {
+            grid-column: 1 / -1;
+        }
 
-    #sb-customize-fields .sb-field-actions {
-    grid-column: -1;
-    justify-self: end;
-    }
+        #sb-customize-fields .sb-field-actions {
+            grid-column: -1;
+            justify-self: end;
+        }
     }
     </style>
 
