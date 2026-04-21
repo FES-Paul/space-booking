@@ -6,19 +6,19 @@ import type {
   PricingResponse,
   SelectedExtra,
   Space,
-} from '@/types';
+} from "@/types";
 
 const BASE = () => window.sbConfig.apiBase;
 const NONCE = () => window.sbConfig.nonce;
 
 async function apiFetch<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
 ): Promise<T> {
   const url = `${BASE()}${path}`;
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    'X-WP-Nonce': NONCE(),
+    "Content-Type": "application/json",
+    "X-WP-Nonce": NONCE(),
     ...(options.headers as Record<string, string>),
   };
 
@@ -34,17 +34,17 @@ async function apiFetch<T>(
 
 // ── Spaces & Packages ─────────────────────────────────────────────────────────
 
-export const fetchSpaces = () => apiFetch<Space[]>('/spaces');
+export const fetchSpaces = () => apiFetch<Space[]>("/spaces");
 
 export const fetchSpace = (id: number) => apiFetch<Space>(`/spaces/${id}`);
 
-export const fetchPackages = () => apiFetch<Package[]>('/packages');
+export const fetchPackages = () => apiFetch<Package[]>("/packages");
 
 // ── Availability ──────────────────────────────────────────────────────────────
 
 export const fetchAvailability = (spaceId: number, date: string) =>
   apiFetch<AvailabilityResponse>(
-    `/availability?space_id=${spaceId}&date=${date}`
+    `/availability?space_id=${spaceId}&date=${date}`,
   );
 
 // ── Extras ────────────────────────────────────────────────────────────────────
@@ -53,10 +53,10 @@ export const fetchExtras = (
   spaceId: number,
   date: string,
   startTime: string,
-  endTime: string
+  endTime: string,
 ) =>
   apiFetch<Extra[]>(
-    `/extras?space_id=${spaceId}&date=${date}&start_time=${startTime}&end_time=${endTime}`
+    `/extras?space_id=${spaceId}&date=${date}&start_time=${startTime}&end_time=${endTime}`,
   );
 
 // ── Pricing ───────────────────────────────────────────────────────────────────
@@ -70,11 +70,11 @@ export const fetchPricing = (params: {
   package_id?: number;
 }) => {
   const qs = new URLSearchParams();
-  qs.set('space_id', String(params.space_id));
-  qs.set('date', params.date);
-  qs.set('start_time', params.start_time);
-  qs.set('end_time', params.end_time);
-  if (params.package_id) qs.set('package_id', String(params.package_id));
+  qs.set("space_id", String(params.space_id));
+  qs.set("date", params.date);
+  qs.set("start_time", params.start_time);
+  qs.set("end_time", params.end_time);
+  if (params.package_id) qs.set("package_id", String(params.package_id));
   (params.extras ?? []).forEach((e, i) => {
     qs.set(`extras[${i}][extra_id]`, String(e.extra_id));
     qs.set(`extras[${i}][quantity]`, String(e.quantity));
@@ -96,18 +96,25 @@ export const createBooking = (payload: {
   notes?: string;
   extras?: SelectedExtra[];
 }) =>
-  apiFetch<BookingCreateResponse>('/bookings', {
-    method: 'POST',
+  apiFetch<BookingCreateResponse>("/bookings", {
+    method: "POST",
     body: JSON.stringify(payload),
   });
 
 // ── Customer Lookup ───────────────────────────────────────────────────────────
 
 export const sendMagicLink = (email: string) =>
-  apiFetch<{ message: string }>('/customer/lookup', {
-    method: 'POST',
+  apiFetch<{ message: string }>("/customer/lookup", {
+    method: "POST",
     body: JSON.stringify({ email }),
   });
 
 export const fetchCustomerBookings = (token: string) =>
-  apiFetch<{ email: string; bookings: unknown[] }>(`/customer/bookings?token=${token}`);
+  apiFetch<{ email: string; bookings: unknown[] }>(
+    `/customer/bookings?token=${token}`,
+  );
+
+// ── Cart Check ─────────────────────────────────────────────────────────────
+
+export const checkCartHasBooking = () =>
+  apiFetch<{ hasCartBooking: boolean }>("/cart/has-booking");

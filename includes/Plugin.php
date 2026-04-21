@@ -4,6 +4,7 @@ namespace SpaceBooking;
 
 use SpaceBooking\Controllers\AvailabilityController;
 use SpaceBooking\Controllers\BookingController;
+use SpaceBooking\Controllers\CartController;
 use SpaceBooking\Controllers\CustomerController;
 use SpaceBooking\Controllers\SpaceController;
 use SpaceBooking\Controllers\WebhookController;
@@ -66,6 +67,7 @@ final class Plugin
 			(new BookingController())->register_routes();
 			(new CustomerController())->register_routes();
 			(new \SpaceBooking\Controllers\PricingController())->register_routes();
+			(new \SpaceBooking\Controllers\CartController())->register_routes();
 			// (new WebhookController())->register_routes(); // Disabled for WooCommerce
 		});
 	}

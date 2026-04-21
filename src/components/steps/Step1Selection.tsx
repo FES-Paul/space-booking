@@ -14,8 +14,15 @@ export function Step1Selection() {
     return `${hour}:${minutes} ${period}`;
   };
 
-  const { selectedSpace, selectedPackage, setSpace, setPackage, nextStep } =
-    useBookingStore();
+  const {
+    selectedSpace,
+    selectedPackage,
+    setSpace,
+    setPackage,
+    nextStep,
+    hasCartBooking,
+    checkCartBooking,
+  } = useBookingStore();
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [packages, setPackages] = useState<Package[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,7 +38,12 @@ export function Step1Selection() {
       .finally(() => setLoading(false));
   }, []);
 
-  const canProceed = selectedSpace !== null || selectedPackage !== null;
+  useEffect(() => {
+    checkCartBooking();
+  }, [checkCartBooking]);
+
+  const canProceed =
+    selectedSpace !== null || (selectedPackage !== null && !hasCartBooking);
 
   return (
     <div className="sb-step sb-step-1">
@@ -181,6 +193,44 @@ export function Step1Selection() {
         </div>
       )}
 
+      {hasCartBooking && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="bg-white p-8 rounded-lg max-w-md mx-4 text-center">
+            <h3 className="text-xl font-bold mb-4 text-gray-900">
+              Ongoing Booking Detected
+            </h3>
+            <p className="mb-6 text-gray-600">
+              You already have an ongoing booking in your cart.
+            </p>
+            <div className="space-y-3">
+              <button
+                className="w-full sb-btn sb-btn--primary py-3"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.location.href = "/checkout/";
+                }}
+              >
+                Proceed to Checkout
+              </button>
+              <button
+                className="w-full sb-btn sb-btn--secondary py-3"
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  // Clear cart logic - to be implemented in step 5
+                  console.log("Clear cart & start new booking");
+                  // await store.clearCart();
+                  // store.setHasCartBooking(false);
+                }}
+              >
+                Delete Previous & Start Again
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="sb-step__actions">
         <button
           className="sb-btn sb-btn--primary"
