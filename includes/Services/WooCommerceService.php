@@ -155,9 +155,8 @@ final class WooCommerceService
 
         $repo = new BookingRepository();
         if ($repo->find($booking_id)) {
-            $repo->update_status($booking_id, 'confirmed');
+            $repo->update_status($booking_id, 'in_review');
             $booking = $repo->find($booking_id);
-            (new EmailService())->send_confirmation($booking);
         }
     }
 

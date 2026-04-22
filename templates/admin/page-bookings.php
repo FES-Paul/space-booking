@@ -87,6 +87,11 @@ defined('ABSPATH') || exit;
     color: #856404;
 }
 
+.sb-status--in_review {
+    background: #cce5ff;
+    color: #004085;
+}
+
 .sb-month-section {
     margin-bottom: 40px;
 }
@@ -136,6 +141,7 @@ defined('ABSPATH') || exit;
             <select name="status">
                 <option value=""><?php esc_html_e('All Status', 'space-booking'); ?></option>
                 <option value="confirmed" <?php selected($_GET['status'] ?? '', 'confirmed'); ?>>Confirmed</option>
+                <option value="in_review" <?php selected($_GET['status'] ?? '', 'in_review'); ?>>In Review</option>
                 <option value="pending" <?php selected($_GET['status'] ?? '', 'pending'); ?>>Pending</option>
             </select>
             <select name="space_id">

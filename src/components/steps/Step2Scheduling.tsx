@@ -131,7 +131,7 @@ export function Step2Scheduling() {
                     key={slot.start}
                     className={`sb-slot ${!validStart || !slot.available ? "sb-slot--invalid" : ""} ${selectedStartTime === slot.start ? "sb-slot--selected" : ""}`}
                     onClick={
-                      !validStart || !slot.available
+                      validStart && slot.available
                         ? () => setStartTime(slot.start)
                         : undefined
                     }

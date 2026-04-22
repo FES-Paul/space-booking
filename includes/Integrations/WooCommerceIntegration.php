@@ -57,6 +57,23 @@ final class WooCommerceIntegration
     }
 
     /**
+     * Helper to get booking ID from order meta or line items
+     */
+    private static function get_booking_id_from_order($order): ?int
+    {
+        $booking_id = $order->get_meta('_sb_booking_id');
+        if (!$booking_id) {
+            foreach ($order->get_items() as $item) {
+                $booking_id = $item->get_meta('sb_booking_id', true);
+                if ($booking_id) {
+                    break;
+                }
+            }
+        }
+        return $booking_id ? (int) $booking_id : null;
+    }
+
+    /**
      * Late check for confirmed booking on order-received pages
      */
     public static function late_redirect_check(): void
@@ -76,16 +93,16 @@ final class WooCommerceIntegration
             return;
         }
 
-        $booking_id = $order->get_meta('_sb_booking_id');
+        $booking_id = self::get_booking_id_from_order($order);
         if (!$booking_id) {
-            error_log('SpaceBooking WC late_redirect: No booking_id in order #' . $order_id);
+            error_log('SpaceBooking WC late_redirect: No booking_id found in order #' . $order_id);
             return;
         }
 
         $repo = new \SpaceBooking\Services\BookingRepository();
         $booking = $repo->find((int) $booking_id);
-        if ($booking && $booking['status'] === 'confirmed') {
-            $confirmation_url = home_url('/booking-confirmation/?id=' . $booking_id . '&status=confirmed');
+        if ($booking && $booking['status'] === 'in_review') {
+            $confirmation_url = home_url('/booking-confirmation/?id=' . $booking_id . '&status=in_review');
             error_log('SpaceBooking WC late_redirect: Redirecting order #' . $order_id . ' → ' . $confirmation_url);
             wp_redirect($confirmation_url);
             exit;
@@ -237,14 +254,14 @@ final class WooCommerceIntegration
         if (!$order)
             return;
 
-        $booking_id = $order->get_meta('_sb_booking_id');
+        $booking_id = self::get_booking_id_from_order($order);
         if (!$booking_id)
             return;
 
         $repo = new \SpaceBooking\Services\BookingRepository();
         $booking = $repo->find((int) $booking_id);
-        if ($booking && $booking['status'] === 'confirmed') {
-            $confirmation_url = home_url('/booking-confirmation/?id=' . $booking_id . '&status=confirmed');
+        if ($booking && $booking['status'] === 'in_review') {
+            $confirmation_url = home_url('/booking-confirmation/?id=' . $booking_id . '&status=in_review');
             wp_redirect($confirmation_url);
             exit;
         }
@@ -263,11 +280,11 @@ final class WooCommerceIntegration
             return;
         }
 
-        $booking_id = $order->get_meta('_sb_booking_id');
-        error_log('SpaceBooking WC: Order #' . $order_id . ' booking_id meta: ' . ($booking_id ?: 'MISSING'));
+        $booking_id = self::get_booking_id_from_order($order);
+        error_log('SpaceBooking WC: Order #' . $order_id . ' booking_id: ' . ($booking_id ?: 'MISSING'));
 
         if (!$booking_id) {
-            error_log('SpaceBooking WC: No _sb_booking_id meta on order #' . $order_id);
+            error_log('SpaceBooking WC: No booking_id found on order #' . $order_id);
             return;
         }
 
@@ -279,10 +296,9 @@ final class WooCommerceIntegration
         }
 
         if ($booking['status'] === 'pending') {
-            $updated = $repo->update_status($booking_id, 'confirmed');
+            $updated = $repo->update_status($booking_id, 'in_review');
             if ($updated) {
-                error_log('SpaceBooking WC: Booking #' . $booking_id . ' confirmed from order #' . $order_id);
-                (new \SpaceBooking\Services\EmailService())->send_confirmation($booking);
+                error_log('SpaceBooking WC: Booking #' . $booking_id . ' set to in_review from order #' . $order_id);
             } else {
                 error_log('SpaceBooking WC: Failed to update status for booking #' . $booking_id);
             }
