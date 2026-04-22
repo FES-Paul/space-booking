@@ -17,8 +17,31 @@ interface Props {
 }
 
 export function BookingApp({ preSpaceId, prePackageId }: Props) {
-  const { setSpace, setPackage, setStep, bookingId } = useBookingStore();
+  const { setSpace, setPackage, setStep, bookingId, loadBookingStatus } =
+    useBookingStore();
   const currentStep = useBookingStore((s) => s.currentStep);
+
+  // Direct booking confirmation from query params or data attrs (Step 1/1)
+  useEffect(() => {
+    const appEl = document.getElementById(
+      "sb-booking-app",
+    ) as HTMLElement | null;
+    const urlParams = new URLSearchParams(window.location.search);
+
+    const directBookingId =
+      appEl?.dataset.bookingId ||
+      urlParams.get("booking_id") ||
+      urlParams.get("id");
+
+    if (directBookingId) {
+      const id = parseInt(directBookingId);
+      if (!isNaN(id)) {
+        useBookingStore.setState({ bookingId: id, currentStep: 7 });
+        loadBookingStatus(id);
+        return; // Skip other init logic
+      }
+    }
+  }, []);
 
   // Cart/session check + cleanup
   useEffect(() => {

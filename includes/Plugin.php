@@ -227,6 +227,19 @@ final class Plugin
             $data_attrs .= ' data-package-id="' . esc_attr($atts['package_id']) . '"';
         }
 
+        // Check for direct booking confirmation via query params
+        $booking_id = isset($_GET['booking_id']) ? (int) $_GET['booking_id'] : 0;
+        $status = isset($_GET['status']) ? sanitize_text_field($_GET['status']) : '';
+
+        if ($booking_id > 0 && $status === 'in_review') {
+            $repo = new \SpaceBooking\Services\BookingRepository();
+            $booking = $repo->find($booking_id);
+
+            if ($booking && $booking['status'] === 'in_review') {
+                $data_attrs .= ' data-booking-id="' . esc_attr($booking_id) . '" data-direct-step="7"';
+            }
+        }
+
         return '<div id="sb-booking-app"' . $data_attrs . '></div>';
     }
 
