@@ -1,27 +1,77 @@
 import React, { useEffect, useState } from "react";
 import { useBookingStore } from "@/store/bookingStore";
 
+interface BookingData {
+  id: number;
+  status: string;
+  space_id: number;
+  space_title?: string;
+  package_id?: number;
+  customer_name: string;
+  customer_email: string;
+  customer_phone?: string;
+  booking_date: string;
+  start_time: string;
+  end_time: string;
+  duration_hours: number;
+  total_price: number;
+  extras?: Array<{ extra_id: number; quantity: number; extra_name?: string }>;
+  notes?: string;
+}
+
 export function Step7Confirmation() {
   const bookingStatus = useBookingStore((s) => s.bookingStatus);
-  const {
-    customerInfo,
-    selectedSpace,
-    selectedPackage,
-    selectedDate,
-    selectedStartTime,
-    selectedEndTime,
-    totalPrice,
-    selectedExtras,
-    availableExtras,
-    bookingId,
-    reset,
-  } = useBookingStore();
+  const bookingId = useBookingStore((s) => s.bookingId);
+  const reset = useBookingStore((s) => s.reset);
+  const [bookingData, setBookingData] = useState<BookingData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const spaceName =
-    selectedSpace?.title ?? selectedPackage?.space_name ?? "Space";
+  // Fetch full booking data when bookingId is available
+  useEffect(() => {
+    if (bookingId) {
+      fetch(`${window.sbConfig.apiBase}/bookings/${bookingId}`)
+        .then((res) => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.json();
+        })
+        .then((data) => {
+          setBookingData(data);
+          setLoading(false);
+        })
+        .catch((err) => {
+          console.error("Failed to fetch booking:", err);
+          setError("Failed to load booking details.");
+          setLoading(false);
+        });
+    } else {
+      setLoading(false);
+    }
+  }, [bookingId]);
 
-  const getExtraTitle = (extraId: number) =>
-    availableExtras.find((e) => e.id === extraId)?.title ?? `Extra #${extraId}`;
+  if (loading) {
+    return (
+      <div className="sb-step sb-step-7">
+        <p>Loading booking details...</p>
+      </div>
+    );
+  }
+
+  if (error || !bookingData) {
+    return (
+      <div className="sb-step sb-step-7">
+        <p className="sb-error">{error || "Booking details not available."}</p>
+        <button
+          className="sb-btn sb-btn--primary"
+          onClick={() => window.location.reload()}
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  const getExtraTitle = (extraId: number) => `Extra #${extraId}`;
 
   return (
     <div className="sb-step sb-step-7">
@@ -31,12 +81,12 @@ export function Step7Confirmation() {
           ✅
         </span>
         <h2 className="sb-confirm-title">
-          {bookingStatus === "confirmed"
-            ? "Payment Confirmed!"
+          {bookingStatus === "in_review"
+            ? "Payment In Review!"
             : "Booking Created!"}
         </h2>
         <p className="sb-confirm-subtitle">
-          {bookingStatus === "confirmed"
+          {bookingStatus === "in_review"
             ? "Payment successful! A human will review this booking to ensure total accuracy. You can expect a confirmation update from a member of our staff within 24 hours."
             : "You're being redirected to secure payment. A confirmation email will be sent after payment."}
         </p>
@@ -47,50 +97,58 @@ export function Step7Confirmation() {
         <div className="sb-invoice__header">
           <h3>
             Booking Receipt (
-            {bookingStatus === "confirmed"
-              ? "Paid - Under Review"
+            {bookingStatus === "in_review"
+              ? "Paid - In Review"
               : "Pending Payment"}
             )
           </h3>
-          {bookingId && <span className="sb-invoice__id">#{bookingId}</span>}
+          {bookingData && (
+            <span className="sb-invoice__id">#{bookingData.id}</span>
+          )}
         </div>
 
         <table className="sb-invoice__table">
           <tbody>
             <tr>
               <th>Space</th>
-              <td>{spaceName}</td>
+              <td>
+                {bookingData.space_title || `Space #${bookingData.space_id}`}
+              </td>
             </tr>
             <tr>
               <th>Date</th>
-              <td>{selectedDate}</td>
+              <td>{bookingData.booking_date}</td>
             </tr>
             <tr>
               <th>Time</th>
               <td>
-                {selectedStartTime} – {selectedEndTime}
+                {bookingData.start_time} – {bookingData.end_time}
               </td>
             </tr>
             <tr>
+              <th>Duration</th>
+              <td>{bookingData.duration_hours} hours</td>
+            </tr>
+            <tr>
               <th>Name</th>
-              <td>{customerInfo.name}</td>
+              <td>{bookingData.customer_name}</td>
             </tr>
             <tr>
               <th>Email</th>
-              <td>{customerInfo.email}</td>
+              <td>{bookingData.customer_email}</td>
             </tr>
-            {customerInfo.phone && (
+            {bookingData.customer_phone && (
               <tr>
                 <th>Phone</th>
-                <td>{customerInfo.phone}</td>
+                <td>{bookingData.customer_phone}</td>
               </tr>
             )}
-            {selectedExtras.length > 0 && (
+            {bookingData.extras && bookingData.extras.length > 0 && (
               <tr>
                 <th>Extras</th>
                 <td>
                   <ul className="sb-confirm-extras">
-                    {selectedExtras.map((e) => (
+                    {bookingData.extras.map((e) => (
                       <li key={e.extra_id}>
                         {getExtraTitle(e.extra_id)}
                         {e.quantity > 1 && ` × ${e.quantity}`}
@@ -102,10 +160,11 @@ export function Step7Confirmation() {
             )}
             <tr className="sb-invoice__total">
               <th>
-                {bookingStatus === "confirmed" ? "Total Paid" : "Total Due"}
+                {bookingStatus === "in_review" ? "Total Paid" : "Total Due"}
               </th>
               <td>
-                {totalPrice.toFixed(2)} {window.sbConfig.symbol}
+                {parseFloat(bookingData.total_price.toString()).toFixed(2)}{" "}
+                {window.sbConfig.symbol}
               </td>
             </tr>
           </tbody>
@@ -122,7 +181,7 @@ export function Step7Confirmation() {
         </button>
       </div>
 
-      {bookingStatus === "confirmed" && (
+      {bookingStatus === "in_review" && (
         <div
           className="sb-review-notice"
           style={{
@@ -138,8 +197,8 @@ export function Step7Confirmation() {
         </div>
       )}
       <p className="sb-confirm-lookup">
-        {bookingStatus === "confirmed"
-          ? "Booking confirmed and under review. Manage via "
+        {bookingStatus === "in_review"
+          ? "Booking in review. Manage via "
           : "You'll receive confirmation after payment. Manage bookings via "}
         <a href="/booking-lookup/">booking lookup</a> with your email.
       </p>
