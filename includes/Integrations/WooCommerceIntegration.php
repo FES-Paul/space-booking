@@ -102,7 +102,7 @@ final class WooCommerceIntegration
         $repo = new \SpaceBooking\Services\BookingRepository();
         $booking = $repo->find((int) $booking_id);
         if ($booking && $booking['status'] === 'in_review') {
-            $confirmation_url = home_url('/booking-confirmation/?id=' . $booking_id . '&status=in_review');
+            $confirmation_url = home_url('/space-booking/?booking_id=' . $booking_id . '&status=in_review');
             error_log('SpaceBooking WC late_redirect: Redirecting order #' . $order_id . ' → ' . $confirmation_url);
             wp_redirect($confirmation_url);
             exit;
@@ -261,7 +261,7 @@ final class WooCommerceIntegration
         $repo = new \SpaceBooking\Services\BookingRepository();
         $booking = $repo->find((int) $booking_id);
         if ($booking && $booking['status'] === 'in_review') {
-            $confirmation_url = home_url('/booking-confirmation/?id=' . $booking_id . '&status=in_review');
+            $confirmation_url = home_url('/space-booking/?booking_id=' . $booking_id . '&status=in_review');
             wp_redirect($confirmation_url);
             exit;
         }
