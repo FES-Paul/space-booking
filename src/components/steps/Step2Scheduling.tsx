@@ -123,21 +123,23 @@ export function Step2Scheduling() {
           <div className="sb-field">
             <label className="sb-label">Start Time</label>
             <div className="sb-slot-grid">
-              {slots
-                .map((slot, i) => {
-                  const validStart = slot.available && isStartValid(i);
-                  if (!validStart) return null;
-                  return (
-                    <button
-                      key={slot.start}
-                      className={`sb-slot ${selectedStartTime === slot.start ? "sb-slot--selected" : ""}`}
-                      onClick={() => setStartTime(slot.start)}
-                    >
-                      {formatTimeTo12Hour(slot.start)}
-                    </button>
-                  );
-                })
-                .filter(Boolean)}
+              {slots.map((slot, i) => {
+                // if (!slot.available) return null;
+                const validStart = isStartValid(i);
+                return (
+                  <button
+                    key={slot.start}
+                    className={`sb-slot ${!validStart || !slot.available ? "sb-slot--invalid" : ""} ${selectedStartTime === slot.start ? "sb-slot--selected" : ""}`}
+                    onClick={
+                      !validStart || !slot.available
+                        ? () => setStartTime(slot.start)
+                        : undefined
+                    }
+                  >
+                    {formatTimeTo12Hour(slot.start)}
+                  </button>
+                );
+              })}
             </div>
           </div>
 

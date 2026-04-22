@@ -373,6 +373,16 @@
   cursor: not-allowed;
 }
 
+.sb-slot--invalid {
+  background: var(--sb-bg);
+  color: var(--sb-muted);
+  text-decoration: line-through;
+  cursor: not-allowed;
+  user-select: none;
+  pointer-events: none;
+  opacity: 0.6;
+}
+
 /* ── Extras ─────────────────────────────────────────────────── */
 .sb-extras {
   display: flex;
