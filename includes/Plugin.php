@@ -40,9 +40,8 @@ final class Plugin
         $this->enqueue_assets();
         $this->register_admin();
 
-        if (!did_action('init')) {
-            add_action('init', [$this, 'init_boot']);
-        }
+        $this->init_boot();  // Run directly
+        add_action('init', [$this, 'init_boot']);  // Also hook for future requests
     }
 
     public function init_boot(): void
