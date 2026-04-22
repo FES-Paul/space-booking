@@ -34,13 +34,11 @@ export function BookingApp({ preSpaceId, prePackageId }: Props) {
           window.location.href = "/checkout/";
           return;
         } else {
-          // Cart empty → clear persisted state
-          useBookingStore.getState().clearPersistedState();
+          // Cart empty, no persisted state to clear
         }
       } catch (e) {
         console.error("Cart check on app init failed:", e);
-        // Assume empty on error → clear state
-        useBookingStore.getState().clearPersistedState();
+        // Assume empty on error, no persisted state to clear
       }
     };
 

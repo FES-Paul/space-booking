@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
 import type {
   BookingStep,
   CustomerInfo,
@@ -58,7 +57,7 @@ interface BookingState {
   checkCartBooking: () => Promise<void>;
   loadBookingStatus: (id: number) => Promise<void>;
   setBookingStatus: (status: "pending" | "confirmed" | "error") => void;
-  clearPersistedState: () => void;
+
   setHasCartBooking: (has: boolean) => void;
   reset: () => void;
   setBookingPolicy: (policy: string) => void;
@@ -67,8 +66,7 @@ interface BookingState {
 const DEFAULT_CUSTOMER: CustomerInfo = {};
 
 export const useBookingStore = create<BookingState>()(
-  persist(
-    (set, get) => ({
+  (set, get) => ({
       // ── Initial state ────────────────────────────────────────────────────────
       currentStep: 1,
       bookingPolicy: "",
@@ -296,7 +294,6 @@ export const useBookingStore = create<BookingState>()(
         }
       },
 
-      clearPersistedState: () => localStorage.removeItem("sb-booking-state"),
       setHasCartBooking: (has: boolean) => set({ hasCartBooking: has }),
 
       // ── Booking Status ───────────────────────────────────────────────────────
@@ -332,7 +329,6 @@ export const useBookingStore = create<BookingState>()(
         set({ bookingStatus: status }),
 
       reset: () => {
-        get().clearPersistedState();
         set({
           currentStep: 1,
           bookingPolicy: "",
@@ -354,9 +350,4 @@ export const useBookingStore = create<BookingState>()(
         });
       },
     }),
-    {
-      name: "sb-booking-state",
-      storage: createJSONStorage(() => localStorage),
-    },
-  ),
 );
