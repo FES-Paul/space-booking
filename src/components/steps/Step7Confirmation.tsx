@@ -71,7 +71,18 @@ export function Step7Confirmation() {
     );
   }
 
-  const getExtraTitle = (extraId: number) => `Extra #${extraId}`;
+  const formatTimeTo12Hour = (timeStr: string): string => {
+    const [hourStr, minuteStr] = timeStr.split(":");
+    let hour = parseInt(hourStr, 10);
+    const minutes = minuteStr;
+    const period = hour >= 12 ? "PM" : "AM";
+    hour = hour % 12;
+    if (hour === 0) hour = 12;
+    return `${hour}:${minutes} ${period}`;
+  };
+
+  const getExtraTitle = (extraId: number, extra_name?: string) =>
+    extra_name || `Extra #${extraId}`;
 
   return (
     <div className="sb-step sb-step-7">
@@ -122,12 +133,13 @@ export function Step7Confirmation() {
             <tr>
               <th>Time</th>
               <td>
-                {bookingData.start_time} – {bookingData.end_time}
+                {formatTimeTo12Hour(bookingData.start_time)} –{" "}
+                {formatTimeTo12Hour(bookingData.end_time)}
               </td>
             </tr>
             <tr>
               <th>Duration</th>
-              <td>{bookingData.duration_hours} hours</td>
+              <td>{Number(bookingData.duration_hours).toFixed(1)} hours</td>
             </tr>
             <tr>
               <th>Name</th>
@@ -150,7 +162,7 @@ export function Step7Confirmation() {
                   <ul className="sb-confirm-extras">
                     {bookingData.extras.map((e) => (
                       <li key={e.extra_id}>
-                        {getExtraTitle(e.extra_id)}
+                        {getExtraTitle(e.extra_id, e.extra_name)}
                         {e.quantity > 1 && ` × ${e.quantity}`}
                       </li>
                     ))}
@@ -173,9 +185,6 @@ export function Step7Confirmation() {
 
       {/* Actions */}
       <div className="sb-confirm-actions">
-        <button className="sb-btn sb-btn--ghost" onClick={() => window.print()}>
-          🖨 Print Receipt
-        </button>
         <button className="sb-btn sb-btn--primary" onClick={reset}>
           Make Another Booking
         </button>

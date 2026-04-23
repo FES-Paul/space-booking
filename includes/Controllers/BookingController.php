@@ -201,7 +201,7 @@ final class BookingController extends WP_REST_Controller
 	public function get_booking(WP_REST_Request $request): WP_REST_Response
 	{
 		$id = (int) $request->get_param('id');
-		$booking = $this->repo->find($id);
+		$booking = $this->repo->findEnriched($id);
 
 		if (!$booking) {
 			return new WP_REST_Response(['message' => 'Booking not found.'], 404);

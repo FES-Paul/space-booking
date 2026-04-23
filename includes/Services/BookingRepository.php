@@ -53,6 +53,27 @@ final class BookingRepository
 	}
 
 	/**
+	 * Fetch enriched booking by ID with space_title and extras.
+	 */
+	public function findEnriched(int $id): ?array
+	{
+		$booking = $this->find($id);
+		if (!$booking) {
+			return null;
+		}
+
+		global $wpdb;
+		$booking['space_title'] = $wpdb->get_var($wpdb->prepare(
+			"SELECT post_title FROM {$wpdb->posts} WHERE ID = %d",
+			$booking['space_id']
+		)) ?: 'Space #' . $booking['space_id'];
+
+		$booking['extras'] = $this->get_extras($id);
+
+		return $booking;
+	}
+
+	/**
 	 * Fetch all bookings for an email address.
 	 */
 	public function find_by_email(string $email): array
