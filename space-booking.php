@@ -56,6 +56,11 @@ spl_autoload_register(static function (string $class): void {
 	}
 });
 
+// ── Admin AJAX ────────────────────────────────────────────────────────────────
+if (is_admin()) {
+	require_once SB_DIR . 'includes/Admin/ajax-handlers.php';
+}
+
 // ── Bootstrap ────────────────────────────────────────────────────────────────
 add_action('plugins_loaded', static function (): void {
 	\SpaceBooking\Plugin::instance()->boot();

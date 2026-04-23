@@ -104,21 +104,21 @@ final class BookingRepository
 
 	/**
 	 * Get extras for a booking.
-	 * 	 -->
-	 * public function get_extras(int $booking_id): array
-	 * {
-	 * 	global $wpdb;
-	 *
-	 * 	return $wpdb->get_results($wpdb->prepare(
-	 * 		"SELECT be.*, p.post_title AS extra_name
-	 * 			 FROM {$wpdb->prefix}sb_booking_extras be
-	 * 			 LEFT JOIN {$wpdb->posts} p ON p.ID = be.extra_id
-	 * 			 WHERE be.booking_id = %d",
-	 * 		$booking_id
-	 * 	), ARRAY_A) ?: [];
-	 * }
-	 *
-	 * /**
+	 */
+	public function get_extras(int $booking_id): array
+	{
+		global $wpdb;
+
+		return $wpdb->get_results($wpdb->prepare(
+			"SELECT be.*, p.post_title AS extra_name
+		\t FROM {$wpdb->prefix}sb_booking_extras be
+		\t LEFT JOIN {$wpdb->posts} p ON p.ID = be.extra_id
+		\t WHERE be.booking_id = %d",
+			$booking_id
+		), ARRAY_A) ?: [];
+	}
+
+	/**
 	 * Cleanup expired pending bookings.
 	 *
 	 * @return int Number of rows deleted

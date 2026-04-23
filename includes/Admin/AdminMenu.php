@@ -218,7 +218,16 @@ final class AdminMenu
 
 	public function page_bookings(): void
 	{
-?>
+		$booking_id = isset($_GET['edit']) ? absint($_GET['edit']) : 0;
+		if ($booking_id) {
+			?>
+<div class="wrap">
+    <?php include __DIR__ . '/../../templates/admin/page-booking-edit.php'; ?>
+</div>
+<?php
+			return;
+		}
+		?>
 <div class="wrap">
     <?php include __DIR__ . '/../../templates/admin/page-bookings.php'; ?>
 </div>

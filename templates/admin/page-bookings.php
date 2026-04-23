@@ -238,10 +238,11 @@ defined('ABSPATH') || exit;
                         if (!empty($day_data['bookings'])) {
                             foreach ($day_data['bookings'] as $b) {
                                 $time = substr($b['start_time'], 0, 5) . '-' . substr($b['end_time'], 0, 5);
-                                echo '<div class="sb-booking">';
+                                $edit_url = admin_url('admin.php?page=space-booking-bookings&edit=' . $b['id']);
+                                echo '<a href="' . esc_url($edit_url) . '" class="sb-booking" style="text-decoration:none; color:inherit; display:block;">';
                                 echo esc_html($time . ' - ' . $b['customer_name']);
                                 echo ' <span class="sb-status sb-status--' . esc_attr($b['status']) . '">' . esc_html(ucfirst($b['status'])) . '</span>';
-                                echo '</div>';
+                                echo '</a>';
                             }
                         }
                         echo '</div>';
