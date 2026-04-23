@@ -241,7 +241,7 @@ defined('ABSPATH') || exit;
                                 $edit_url = admin_url('admin.php?page=space-booking-bookings&edit=' . $b['id']);
                                 echo '<a href="' . esc_url($edit_url) . '" class="sb-booking" style="text-decoration:none; color:inherit; display:block;">';
                                 echo esc_html($time . ' - ' . $b['customer_name']);
-                                echo ' <span class="sb-status sb-status--' . esc_attr($b['status']) . '">' . esc_html(ucfirst($b['status'])) . '</span>';
+                                echo ' <span class="sb-status sb-status--' . esc_attr($b['status']) . '">' . str_replace('_', ' ', esc_html(ucfirst($b['status']))) . '</span>';
                                 echo '</a>';
                             }
                         }
