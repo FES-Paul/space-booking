@@ -52,9 +52,13 @@ export interface Extra {
 }
 
 export interface TimeSlot {
-  start: string; // \"H:i\"
+  start: string; // "H:i"
   end: string;
   available: boolean;
+  slot_id?: string;
+  override_price?: number;
+  pre_buffer?: number;
+  post_buffer?: number;
 }
 
 export interface AvailabilityResponse {

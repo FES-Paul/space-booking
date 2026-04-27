@@ -215,9 +215,52 @@ final class SpaceMetaBox
     </div>
     <button type="button" id="sb-add-override"
         class="button"><?php esc_html_e('Add Price Override', 'space-booking'); ?></button>
-</div>
 
+    <!-- FIXED SLOTS REPEATER -->
+    <h4><?php esc_html_e('Fixed Time Slots', 'space-booking'); ?></h4>
+    <p class="description">
+        <?php esc_html_e('Define exact time slots for this space. Blank buffers use space/global defaults. Capacity is per slot.', 'space-booking'); ?>
+    </p>
 
+    <div id="sb-fixed-slots-container">
+        <div class="sb-slot-header"
+            style="display: grid; grid-template-columns: 80px 100px 100px 80px 120px 80px auto; gap: 12px; align-items: center; padding: 8px 0; font-weight: 600; border-bottom: 2px solid #ddd; margin-bottom: 8px;">
+            <span>Pre Buf</span>
+            <span>Start</span>
+            <span>End</span>
+            <span>Post Buf</span>
+            <span>Price</span>
+            <span>Capacity</span>
+            <span></span>
+        </div>
+        <div id="sb-fixed-slots">
+            <?php
+            $fixed_slots = get_post_meta($post->ID, '_sb_fixed_slots', true);
+            if (!is_array($fixed_slots))
+                $fixed_slots = [];
+            foreach ($fixed_slots as $i => $slot):
+                ?>
+            <div class="sb-slot-row"
+                style="display: grid; grid-template-columns: 80px 100px 100px 80px 120px 80px auto; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid #ddd;">
+                <input type="number" name="sb_fixed_slots[<?php echo $i; ?>][pre_buffer]" min="0" placeholder="0"
+                    value="<?php echo esc_attr($slot['pre_buffer'] ?? ''); ?>" style="width:70px;">
+                <input type="time" name="sb_fixed_slots[<?php echo $i; ?>][start_time]" required
+                    value="<?php echo esc_attr($slot['start_time'] ?? ''); ?>">
+                <input type="time" name="sb_fixed_slots[<?php echo $i; ?>][end_time]" required
+                    value="<?php echo esc_attr($slot['end_time'] ?? ''); ?>">
+                <input type="number" name="sb_fixed_slots[<?php echo $i; ?>][post_buffer]" min="0" placeholder="0"
+                    value="<?php echo esc_attr($slot['post_buffer'] ?? ''); ?>" style="width:70px;">
+                <input type="number" name="sb_fixed_slots[<?php echo $i; ?>][override_price]" step="0.01" min="0"
+                    placeholder="" value="<?php echo esc_attr($slot['override_price'] ?? ''); ?>" style="width:100px;">
+                <input type="number" name="sb_fixed_slots[<?php echo $i; ?>][capacity]" min="1"
+                    value="<?php echo esc_attr($slot['capacity'] ?? 1); ?>" style="width:70px;">
+                <button type="button" class="button-link sb-remove-slot" style="color:#d63638;">×</button>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+    <button type="button" id="sb-add-fixed-slot"
+        class="button"><?php esc_html_e('Add Fixed Slot', 'space-booking'); ?></button>
 </div>
 
 <script>
@@ -253,6 +296,26 @@ jQuery(document).ready(function($) {
     });
     $(document).on('click', '.sb-remove-override', function() {
         $(this).closest('.sb-override-row').remove();
+    });
+
+    // Fixed slots JS
+    let fixedSlotIndex = <?php echo count($fixed_slots); ?>;
+    $('#sb-add-fixed-slot').click(function() {
+        const row = `
+            <div class="sb-slot-row" style="display: grid; grid-template-columns: 80px 100px 100px 80px 120px 80px auto; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid #ddd;">
+                <input type="number" name="sb_fixed_slots[${fixedSlotIndex}][pre_buffer]" min="0" placeholder="0" style="width:70px;">
+                <input type="time" name="sb_fixed_slots[${fixedSlotIndex}][start_time]" required>
+                <input type="time" name="sb_fixed_slots[${fixedSlotIndex}][end_time]" required>
+                <input type="number" name="sb_fixed_slots[${fixedSlotIndex}][post_buffer]" min="0" placeholder="0" style="width:70px;">
+                <input type="number" name="sb_fixed_slots[${fixedSlotIndex}][override_price]" step="0.01" min="0" placeholder="" style="width:100px;">
+                <input type="number" name="sb_fixed_slots[${fixedSlotIndex}][capacity]" min="1" value="1" style="width:70px;">
+                <button type="button" class="button-link sb-remove-slot" style="color:#d63638;">×</button>
+            </div>`;
+        $('#sb-fixed-slots').append(row);
+        fixedSlotIndex++;
+    });
+    $(document).on('click', '.sb-remove-slot', function() {
+        $(this).closest('.sb-slot-row').remove();
     });
 });
 </script>
@@ -339,5 +402,58 @@ jQuery(document).ready(function($) {
             ];
         }
         update_post_meta($post_id, '_sb_price_overrides', $clean_price_ov);
+
+        // FIXED SLOTS - validate no overlaps, add capacity
+        $raw_fixed_slots = $_POST['sb_fixed_slots'] ?? [];
+        $clean_fixed_slots = [];
+        $slot_footprints = [];  // for overlap check
+
+        foreach ($raw_fixed_slots as $raw_slot) {
+            $pre_buf = !empty($raw_slot['pre_buffer']) ? (int) $raw_slot['pre_buffer'] : null;
+            $post_buf = !empty($raw_slot['post_buffer']) ? (int) $raw_slot['post_buffer'] : null;
+            $start_time = sanitize_text_field($raw_slot['start_time'] ?? '');
+            $end_time = sanitize_text_field($raw_slot['end_time'] ?? '');
+            $override_price = !empty($raw_slot['override_price']) ? (float) $raw_slot['override_price'] : null;
+            $capacity = max(1, (int) ($raw_slot['capacity'] ?? 1));
+
+            if (empty($start_time) || empty($end_time))
+                continue;
+
+            $start_min = self::time_to_minutes($start_time);
+            $end_min = self::time_to_minutes($end_time);
+
+            if ($start_min >= $end_min) {
+                add_settings_error('sb_space', 'invalid_slot_time', 'Slot start must be before end.', 'error');
+                return;
+            }
+
+            // Check footprint overlap with existing slots
+            foreach ($clean_fixed_slots as $existing) {
+                $exist_start = self::time_to_minutes($existing['start_time']);
+                $exist_end = self::time_to_minutes($existing['end_time']);
+                if ($start_min < $exist_end && $end_min > $exist_start) {
+                    add_settings_error('sb_space', 'slot_overlap', 'Fixed slots cannot overlap.', 'error');
+                    return;
+                }
+            }
+
+            $clean_fixed_slots[] = [
+                'slot_id' => 'slot_' . uniqid(),
+                'start_time' => $start_time,
+                'end_time' => $end_time,
+                'pre_buffer' => $pre_buf,
+                'post_buffer' => $post_buf,
+                'override_price' => $override_price,
+                'capacity' => $capacity
+            ];
+        }
+
+        update_post_meta($post_id, '_sb_fixed_slots', $clean_fixed_slots);
+    }
+
+    private static function time_to_minutes(string $time): int
+    {
+        [$h, $m] = explode(':', $time);
+        return (int) $h * 60 + (int) $m;
     }
 }

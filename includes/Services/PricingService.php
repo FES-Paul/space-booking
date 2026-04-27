@@ -34,9 +34,40 @@ final class PricingService
 		string $start_time,
 		string $end_time,
 		array $extras = [],
-		?int $package_id = null
+		?int $package_id = null,
+		?string $slot_id = null
 	): array {
 		$duration_hours = $this->hours_between($start_time, $end_time);
+
+		// ── Fixed slot override price (highest priority)
+		if ($slot_id) {
+			$fixed_slots = get_post_meta($space_id, '_sb_fixed_slots', true);
+			if (is_array($fixed_slots)) {
+				foreach ($fixed_slots as $slot) {
+					if ($slot['slot_id'] === $slot_id) {
+						$slot_price = $slot['override_price'] ?? null;
+						if ($slot_price !== null) {
+							$extras_price = $this->calculate_extras($extras);
+							$total = $slot_price + $extras_price;
+							return [
+								'base_price' => $slot_price,
+								'modifier_price' => 0.0,
+								'extras_price' => $extras_price,
+								'total_price' => $total,
+								'duration_hours' => $duration_hours,
+								'display_duration' => round($duration_hours, 1),
+								'breakdown' => [
+									['label' => 'Fixed slot price', 'amount' => $slot_price],
+									['label' => 'Extras', 'amount' => $extras_price],
+									['label' => 'Duration', 'amount' => 0, 'info' => sprintf('%.1fh', $duration_hours)],
+								],
+							];
+						}
+						break;
+					}
+				}
+			}
+		}
 
 		// ── Package shortcut ──────────────────────────────────────────────────
 		if ($package_id) {

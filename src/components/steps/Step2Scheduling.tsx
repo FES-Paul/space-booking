@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useBookingStore } from "@/store/bookingStore";
 import { fetchAvailability } from "@/utils/api";
 import type { TimeSlot } from "@/types";
+import { fetchPricing } from "@/utils/api";
 
 export function Step2Scheduling() {
   const {
@@ -22,6 +23,8 @@ export function Step2Scheduling() {
   const [slots, setSlots] = useState<TimeSlot[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [pricePreview, setPricePreview] = useState(0);
+  const [priceLoading, setPriceLoading] = useState(false);
 
   const timeToMinutes = (timeStr: string): number => {
     const [h, m] = timeStr.split(":").map(Number);
@@ -38,8 +41,11 @@ export function Step2Scheduling() {
     return `${hour}:${minutes} ${period}`;
   };
 
+  // Legacy dynamic mode (if no fixed slots)
   const minDuration = selectedSpace?.min_duration ?? 1;
   const maxDuration = selectedSpace?.max_duration ?? 8;
+
+  const hasFixedSlots = slots.some((s) => s.slot_id);
 
   const isStartValid = (slotIndex: number): boolean => {
     if (slotIndex + minDuration > slots.length) return false;
@@ -47,6 +53,36 @@ export function Step2Scheduling() {
       if (!slots[slotIndex + k].available) return false;
     }
     return true;
+  };
+
+  // Fixed slot selection handler
+  const selectFixedSlot = async (slot: TimeSlot) => {
+    if (!slot.available) return;
+
+    setStartTime(slot.start);
+    setEndTime(slot.end);
+
+    if (slot.override_price) {
+      setPricePreview(slot.override_price);
+    } else {
+      // Fallback to API pricing if no override
+      setPriceLoading(true);
+      try {
+        const pricing = await fetchPricing({
+          space_id: spaceId!,
+          date: selectedDate!,
+          start_time: slot.start,
+          end_time: slot.end,
+          extras: [],
+          package_id: selectedPackage?.id,
+        });
+        setPricePreview(pricing.total_price);
+      } catch (e) {
+        console.error("Price preview failed:", e);
+      } finally {
+        setPriceLoading(false);
+      }
+    }
   };
 
   // Auto-set first valid end time (>= minDuration) when start changes
@@ -119,67 +155,138 @@ export function Step2Scheduling() {
 
       {!loading && selectedDate && slots.length > 0 && (
         <>
-          {/* Start time grid */}
-          <div className="sb-field">
-            <label className="sb-label">Start Time</label>
-            <div className="sb-slot-grid">
-              {slots.map((slot, i) => {
-                // if (!slot.available) return null;
-                const validStart = isStartValid(i);
-                return (
-                  <button
-                    key={slot.start}
-                    className={`sb-slot ${!validStart || !slot.available ? "sb-slot--invalid" : ""} ${selectedStartTime === slot.start ? "sb-slot--selected" : ""}`}
-                    onClick={
-                      validStart && slot.available
-                        ? () => setStartTime(slot.start)
-                        : undefined
-                    }
-                  >
-                    {formatTimeTo12Hour(slot.start)}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* End time */}
-          {selectedStartTime && (
+          {hasFixedSlots ? (
+            /* FIXED SLOTS MODE: Card list */
             <div className="sb-field">
-              <label className="sb-label" htmlFor="sb-end-time">
-                End Time
-              </label>
-              <select
-                id="sb-end-time"
-                className="sb-input"
-                value={selectedEndTime}
-                onChange={(e) => setEndTime(e.target.value)}
+              <label className="sb-label">Available Time Slots</label>
+              <div
+                className="sb-slot-list"
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "12px",
+                }}
               >
-                {getFirstValidEnd() && (
-                  <option key="default" value={getFirstValidEnd()}>
-                    {minDuration}h ({formatTimeTo12Hour(getFirstValidEnd())})
-                  </option>
-                )}
-                {endTimeOptions.map((slot, i) => {
-                  const hours = Math.round(
-                    (timeToMinutes(slot.end) -
-                      timeToMinutes(selectedStartTime)) /
-                      60,
-                  );
-                  const tooShort = hours < minDuration;
-                  const tooLong = hours > maxDuration;
-                  return (
-                    <option
-                      key={slot.end}
-                      value={slot.end}
-                      disabled={tooShort || tooLong}
+                {slots.map((slot) => (
+                  <button
+                    key={slot.slot_id || slot.start}
+                    className={`sb-slot sb-slot--card ${!slot.available ? "sb-slot--invalid" : ""} ${selectedStartTime === slot.start ? "sb-slot--selected" : ""}`}
+                    onClick={() => selectFixedSlot(slot)}
+                    disabled={!slot.available}
+                    style={{
+                      padding: "16px",
+                      borderRadius: "8px",
+                      textAlign: "left",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: "600", fontSize: "16px" }}>
+                        {formatTimeTo12Hour(slot.start)} -{" "}
+                        {formatTimeTo12Hour(slot.end)}
+                      </div>
+                      <div
+                        style={{
+                          color: slot.override_price
+                            ? "var(--sb-price)"
+                            : "var(--sb-muted)",
+                          fontSize: "14px",
+                        }}
+                      >
+                        Duration:{" "}
+                        {timeToMinutes(slot.end) - timeToMinutes(slot.start)}min
+                        {slot.override_price && (
+                          <span
+                            style={{ marginLeft: "12px", fontWeight: "600" }}
+                          >
+                            ${slot.override_price}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        padding: "4px 8px",
+                        borderRadius: "4px",
+                        background: slot.available ? "#d4edda" : "#f8d7da",
+                        color: slot.available ? "#155724" : "#721c24",
+                      }}
                     >
-                      {hours}h ({formatTimeTo12Hour(slot.end)})
-                    </option>
-                  );
-                })}
-              </select>
+                      {slot.available ? "Available" : "Booked"}
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
+          ) : (
+            /* LEGACY DYNAMIC GRID MODE */
+            <>
+              {/* Start time grid */}
+              <div className="sb-field">
+                <label className="sb-label">Start Time</label>
+                <div className="sb-slot-grid">
+                  {slots.map((slot, i) => {
+                    const validStart = isStartValid(i);
+                    return (
+                      <button
+                        key={slot.start}
+                        className={`sb-slot ${!validStart || !slot.available ? "sb-slot--invalid" : ""} ${selectedStartTime === slot.start ? "sb-slot--selected" : ""}`}
+                        onClick={
+                          validStart && slot.available
+                            ? () => setStartTime(slot.start)
+                            : undefined
+                        }
+                      >
+                        {formatTimeTo12Hour(slot.start)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* End time */}
+              {selectedStartTime && (
+                <div className="sb-field">
+                  <label className="sb-label" htmlFor="sb-end-time">
+                    End Time
+                  </label>
+                  <select
+                    id="sb-end-time"
+                    className="sb-input"
+                    value={selectedEndTime}
+                    onChange={(e) => setEndTime(e.target.value)}
+                  >
+                    {getFirstValidEnd() && (
+                      <option key="default" value={getFirstValidEnd()}>
+                        {minDuration}h ({formatTimeTo12Hour(getFirstValidEnd())}
+                        )
+                      </option>
+                    )}
+                    {endTimeOptions.map((slot, i) => {
+                      const hours = Math.round(
+                        (timeToMinutes(slot.end) -
+                          timeToMinutes(selectedStartTime)) /
+                          60,
+                      );
+                      const tooShort = hours < minDuration;
+                      const tooLong = hours > maxDuration;
+                      return (
+                        <option
+                          key={slot.end}
+                          value={slot.end}
+                          disabled={tooShort || tooLong}
+                        >
+                          {hours}h ({formatTimeTo12Hour(slot.end)})
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+              )}
+            </>
           )}
         </>
       )}

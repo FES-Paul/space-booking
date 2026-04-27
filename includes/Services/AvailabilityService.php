@@ -27,8 +27,54 @@ final class AvailabilityService
 	 * @param string $date       Y-m-d
 	 * @param int    $step_mins  Slot step in minutes (default 60)
 	 */
+
+	/**
+	 * New fixed slots logic - load from meta, check availability against booked
+	 */
+	public function get_fixed_slots(int $space_id, string $date): array
+	{
+		$fixed_slots = get_post_meta($space_id, '_sb_fixed_slots', true);
+		if (!is_array($fixed_slots) || empty($fixed_slots)) {
+			return [];  // No fixed slots defined
+		}
+
+		$booked_intervals = $this->repo->get_confirmed_intervals($space_id, $date);
+		$space_pre_buf = (int) get_post_meta($space_id, '_sb_buffer_pre_minutes', true) ?: (int) get_option('sb_buffer_pre_minutes', 0);
+		$space_post_buf = (int) get_post_meta($space_id, '_sb_buffer_post_minutes', true) ?: (int) get_option('sb_buffer_post_minutes', 0);
+
+		$slots = [];
+		foreach ($fixed_slots as $slot_data) {
+			$pre_buf = $slot_data['pre_buffer'] ?? $space_pre_buf;
+			$post_buf = $slot_data['post_buffer'] ?? $space_post_buf;
+
+			$slot_start = $this->add_minutes($slot_data['start_time'], -$pre_buf);
+			$slot_end = $this->add_minutes($slot_data['end_time'], $post_buf);
+
+			$is_available = !self::overlaps($slot_start, $slot_end, $booked_intervals);
+
+			$slots[] = [
+				'slot_id' => $slot_data['slot_id'],
+				'start' => $slot_data['start_time'],
+				'end' => $slot_data['end_time'],
+				'available' => $is_available,
+				'override_price' => $slot_data['override_price'],
+				'pre_buffer' => $pre_buf,
+				'post_buffer' => $post_buf
+			];
+		}
+
+		return $slots;
+	}
+
 	public function get_slots(int $space_id, string $date, int $step_mins = 60): array
 	{
+		// Check if fixed slots exist, use them first
+		$fixed_slots = get_post_meta($space_id, '_sb_fixed_slots', true);
+		if (is_array($fixed_slots) && !empty($fixed_slots)) {
+			return $this->get_fixed_slots($space_id, $date);
+		}
+
+		// Fallback to dynamic slots
 		[$open, $close] = $this->resolve_effective_hours($space_id, $date);
 
 		if (!$open || !$close) {

@@ -91,8 +91,15 @@ final class AvailabilityController extends WP_REST_Controller
 			return new WP_REST_Response(['message' => 'Space not found.'], 404);
 		}
 
-		$slots = $this->availability->get_slots($space_id, $date, $step_mins);
+		$slots = $this->availability->get_slots($space_id, $date);
 		[$open, $close] = $this->availability->resolve_effective_hours($space_id, $date);
+
+		// For fixed slots, compute effective open/close from slots
+		$is_fixed = !empty(get_post_meta($space_id, '_sb_fixed_slots', true));
+		if ($is_fixed && !empty($slots)) {
+			$open = min(array_map(fn($s) => $s['start'], $slots));
+			$close = max(array_map(fn($s) => $s['end'], $slots));
+		}
 
 		return rest_ensure_response([
 			'date' => $date,
@@ -100,6 +107,7 @@ final class AvailabilityController extends WP_REST_Controller
 			'open_time' => $open,
 			'close_time' => $close,
 			'slots' => $slots,
+			'is_fixed_slots' => $is_fixed,
 		]);
 	}
 
