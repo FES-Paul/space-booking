@@ -58,8 +58,11 @@ import(window.sbConfig.viteBase + '/src/confirmation-main.tsx?' + Date.now())
 <div class="sb-confirmation-success">
     <h2>Booking #<?= esc_html($booking_id) ?> Confirmed!</h2>
     <p>Space: <?= esc_html(get_the_title($booking['space_id'])) ?></p>
-    <p>Date: <?= esc_html($booking['booking_date']) ?>
-        <?= esc_html($booking['start_time']) ?>–<?= esc_html($booking['end_time']) ?></p>
+    <p>Date: <?= esc_html($booking['booking_date']) ?> | <?= date('g:i A', strtotime($booking['start_time'])) ?> –
+        <?= date('g:i A', strtotime($booking['end_time'])) ?> | <?= $booking['duration_hours'] ?> hours</p>
+    <?php if (!empty($booking['extras'])): ?>
+    <p>Extras: <?= implode(', ', array_column($booking['extras'], 'extra_name')) ?></p>
+    <?php endif; ?>
 </div>
 <?php endif; ?>
 
