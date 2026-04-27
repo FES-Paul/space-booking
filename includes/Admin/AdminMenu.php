@@ -19,7 +19,7 @@ final class AdminMenu
 		add_menu_page(
 			__('Space Booking', 'space-booking'),
 			__('Space Booking', 'space-booking'),
-			'manage_options',
+			'manage_space_bookings',
 			'space-booking',
 			[$this, 'page_dashboard'],
 			'dashicons-calendar-alt',
@@ -31,7 +31,7 @@ final class AdminMenu
 			'space-booking',
 			__('Dashboard', 'space-booking'),
 			__('Dashboard', 'space-booking'),
-			'manage_options',
+			'manage_space_bookings',
 			'space-booking',
 			[$this, 'page_dashboard']
 		);
@@ -41,7 +41,7 @@ final class AdminMenu
 			'space-booking',
 			__('All Bookings', 'space-booking'),
 			__('All Bookings', 'space-booking'),
-			'manage_options',
+			'manage_space_bookings',
 			'space-booking-bookings',
 			[$this, 'page_bookings']
 		);
@@ -51,7 +51,7 @@ final class AdminMenu
 			'space-booking',
 			__('Spaces', 'space-booking'),
 			__('Spaces', 'space-booking'),
-			'manage_options',
+			'manage_space_bookings',
 			'edit.php?post_type=sb_space'
 		);
 
@@ -60,7 +60,7 @@ final class AdminMenu
 			'space-booking',
 			__('Extras', 'space-booking'),
 			__('Extras', 'space-booking'),
-			'manage_options',
+			'manage_space_bookings',
 			'edit.php?post_type=sb_extra'
 		);
 
@@ -69,7 +69,7 @@ final class AdminMenu
 			'space-booking',
 			__('Packages', 'space-booking'),
 			__('Packages', 'space-booking'),
-			'manage_options',
+			'manage_space_bookings',
 			'edit.php?post_type=sb_package'
 		);
 
@@ -133,17 +133,13 @@ final class AdminMenu
 
 	public function page_dashboard(): void
 	{
-		global $wpdb;
+		$repo = \SpaceBooking\Container::instance()->get(\SpaceBooking\Services\BookingRepository::class);
+		$stats = $repo->getDashboardStats();
+		$total_confirmed = $stats['total_confirmed'] ?? 0;
+		$total_pending = $stats['total_pending'] ?? 0;
+		$total_revenue = $stats['total_revenue'] ?? 0;
+		$recent_bookings = $stats['recent_bookings'] ?? [];
 
-		$total_confirmed = (int) $wpdb->get_var(
-			"SELECT COUNT(*) FROM {$wpdb->prefix}sb_bookings WHERE status = 'confirmed'"
-		);
-		$total_pending = (int) $wpdb->get_var(
-			"SELECT COUNT(*) FROM {$wpdb->prefix}sb_bookings WHERE status = 'pending'"
-		);
-		$total_revenue = (float) $wpdb->get_var(
-			"SELECT COALESCE(SUM(total_price), 0) FROM {$wpdb->prefix}sb_bookings WHERE status = 'confirmed'"
-		);
 		$recent = $wpdb->get_results(
 			"SELECT b.*, p.post_title AS space_name
 		\t FROM {$wpdb->prefix}sb_bookings b
@@ -189,12 +185,12 @@ final class AdminMenu
             </tr>
         </thead>
         <tbody>
-            <?php if (empty($recent)): ?>
+            <?php if (empty($recent_bookings)): ?>
             <tr>
                 <td colspan="7"><?php esc_html_e('No bookings yet.', 'space-booking'); ?></td>
             </tr>
             <?php else: ?>
-            <?php foreach ($recent as $b): ?>
+            <?php foreach ($recent_bookings as $b): ?>
             <tr>
                 <td><?php echo esc_html($b['id']); ?></td>
                 <td><?php echo esc_html($b['customer_name']); ?><br><small><?php echo esc_html($b['customer_email']); ?></small>

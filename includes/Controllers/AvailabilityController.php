@@ -19,16 +19,11 @@ final class AvailabilityController extends WP_REST_Controller
 {
 	protected $namespace = 'space-booking/v1';
 
-	private AvailabilityService $availability;
-	private InventoryService $inventory;
-	private PricingService $pricing;
-
-	public function __construct()
-	{
-		$this->availability = new AvailabilityService();
-		$this->inventory = new InventoryService();
-		$this->pricing = new PricingService();
-	}
+	public function __construct(
+		private AvailabilityService $availability,
+		private InventoryService $inventory,
+		private PricingService $pricing
+	) {}
 
 	public function register_routes(): void
 	{

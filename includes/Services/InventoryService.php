@@ -2,8 +2,17 @@
 
 namespace SpaceBooking\Services;
 
-final class InventoryService
+use SpaceBooking\Services\Interfaces\InventoryServiceInterface;
+
+final class InventoryService implements InventoryServiceInterface
 {
+	private DatabaseService $db;
+
+	public function __construct(DatabaseService $db = null)
+	{
+		$this->db = $db ?: new DatabaseService();
+	}
+
 	private function time_to_minutes(string $time): int
 	{
 		[$h, $m] = explode(':', $time);
@@ -16,7 +25,7 @@ final class InventoryService
 		if (!is_array($overrides))
 			return false;
 
-		$day_of_week = (int) (new \DateTime($date))->format('w');  // 0=Sun..6=Sat
+		$day_of_week = (int) (new \DateTime($date))->format('w');
 
 		foreach ($overrides as $ov) {
 			if ((int) ($ov['space_id'] ?? 0) !== $space_id)
@@ -25,10 +34,9 @@ final class InventoryService
 				continue;
 
 			if (!empty($ov['closed'])) {
-				return true;  // Closed override
+				return true;
 			}
 
-			// Time window restriction
 			$ov_start = $this->time_to_minutes($ov['start_time'] ?? '');
 			$ov_end = $this->time_to_minutes($ov['end_time'] ?? '');
 			if (!$ov_start || !$ov_end)
@@ -37,10 +45,8 @@ final class InventoryService
 			$request_start = $this->time_to_minutes($start_time);
 			$request_end = $this->time_to_minutes($end_time);
 
-			// AVAILABILITY window: block if request does NOT fully contain/overlap window? No:
-			// Block if OUTSIDE window (not overlapping)
 			if ($ov_start && $ov_end && ($request_end <= $ov_start || $request_start >= $ov_end)) {
-				return true;  // Outside availability window
+				return true;
 			}
 		}
 		return false;
@@ -61,13 +67,10 @@ final class InventoryService
 
 		foreach ($extras as $extra) {
 			$allowed_spaces = get_post_meta($extra->ID, '_sb_allowed_spaces', true);
-			if (is_array($allowed_spaces) && !empty($allowed_spaces)) {
-				if (!in_array($space_id, array_map('intval', $allowed_spaces), true)) {
-					continue;
-				}
+			if (is_array($allowed_spaces) && !empty($allowed_spaces) && !in_array($space_id, array_map('intval', $allowed_spaces), true)) {
+				continue;
 			}
 
-			// Check space/day/time overrides FIRST
 			if ($this->is_override_blocked($extra->ID, $space_id, $date, $start_time, $end_time)) {
 				$result[] = [
 					'id' => $extra->ID,
@@ -105,19 +108,17 @@ final class InventoryService
 		return $result;
 	}
 
-	public function get_booked_quantity(int $extra_id, string $date, string $start_time, string $end_time): int
+	public function get_booked_quantity(int $extra_id, string $date, string $end_time, string $start_time): int
 	{
-		global $wpdb;
-
-		return (int) $wpdb->get_var($wpdb->prepare(
-			"SELECT COALESCE(SUM(be.quantity), 0) 
-			FROM {$wpdb->prefix}sb_booking_extras be
-			JOIN {$wpdb->prefix}sb_bookings b ON b.id = be.booking_id 
-			WHERE be.extra_id = %d AND b.booking_date = %s 
-			AND b.status IN ('pending', 'confirmed') 
-			AND b.start_time < %s AND b.end_time > %s",
-			$extra_id, $date, $end_time, $start_time
-		));
+		$prefix = $this->db->getPrefix();
+		return (int) $this->db->scalar("
+            SELECT COALESCE(SUM(be.quantity), 0) 
+            FROM {$prefix}sb_booking_extras be
+            JOIN {$prefix}sb_bookings b ON b.id = be.booking_id 
+            WHERE be.extra_id = %d AND b.booking_date = %s 
+              AND b.status IN ('pending', 'confirmed') 
+              AND b.start_time < %s AND b.end_time > %s
+        ", [$extra_id, $date, $end_time, $start_time]);
 	}
 
 	public function validate_extras(array $extras, string $date, string $start_time, string $end_time, int $exclude_booking_id = 0): array
@@ -144,16 +145,14 @@ final class InventoryService
 
 	private function get_booked_quantity_excluding(int $extra_id, string $date, string $start_time, string $end_time, int $exclude_booking_id): int
 	{
-		global $wpdb;
-
-		return (int) $wpdb->get_var($wpdb->prepare(
-			"SELECT COALESCE(SUM(be.quantity), 0) 
-			FROM {$wpdb->prefix}sb_booking_extras be
-			JOIN {$wpdb->prefix}sb_bookings b ON b.id = be.booking_id 
-			WHERE be.extra_id = %d AND b.booking_date = %s AND b.id != %d 
-			AND b.status IN ('pending', 'confirmed') 
-			AND b.start_time < %s AND b.end_time > %s",
-			$extra_id, $date, $exclude_booking_id, $end_time, $start_time
-		));
+		$prefix = $this->db->getPrefix();
+		return (int) $this->db->scalar("
+            SELECT COALESCE(SUM(be.quantity), 0) 
+            FROM {$prefix}sb_booking_extras be
+            JOIN {$prefix}sb_bookings b ON b.id = be.booking_id 
+            WHERE be.extra_id = %d AND b.booking_date = %s AND b.id != %d 
+              AND b.status IN ('pending', 'confirmed') 
+              AND b.start_time < %s AND b.end_time > %s
+        ", [$extra_id, $date, $exclude_booking_id, $end_time, $start_time]);
 	}
 }

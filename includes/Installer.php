@@ -26,6 +26,7 @@ final class Installer
 	// ── Schema ───────────────────────────────────────────────────────────────
 	private static function create_tables(): void
 	{
+		$db = new \SpaceBooking\Services\DatabaseService();
 		global $wpdb;
 		$charset = $wpdb->get_charset_collate();
 
@@ -100,8 +101,10 @@ final class Installer
 		dbDelta($sql_pricing);
 
 		// Run migrations
-		(new \SpaceBooking\Migrations\AddExpiredAt())->run();
-		(new \SpaceBooking\Migrations\AddInReviewStatus())->run();
+		$m1 = new \SpaceBooking\Migrations\AddExpiredAt();
+		$m2 = new \SpaceBooking\Migrations\AddInReviewStatus();
+		$m1->run($db);
+		$m2->run($db);
 
 		update_option('sb_db_version', SB_VERSION);
 	}
@@ -122,5 +125,15 @@ final class Installer
 		add_option('sb_buffer_pre_minutes', 15);
 		add_option('sb_buffer_post_minutes', 15);
 		add_option('sb_booking_confirmation_tpl', '');
+
+		// Add custom capability
+		$admin_role = get_role('administrator');
+		if ($admin_role) {
+			$admin_role->add_cap('manage_space_bookings');
+		}
+		$editor_role = get_role('editor');
+		if ($editor_role) {
+			$editor_role->add_cap('manage_space_bookings');
+		}
 	}
 }

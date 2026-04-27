@@ -26,7 +26,19 @@ final class WooCommerceService
         }
 
         if (WC()->cart === null) {
-            throw new \RuntimeException('WooCommerce cart not available.');
+            wc_load_cart();
+        }
+
+        // Initialize session and cart for REST API context (fixes critical error)
+        if (null === WC()->session) {
+            WC()->session = new \WC_Session_Handler();
+            WC()->session->init();
+        }
+        if (null === WC()->cart) {
+            wc_load_cart();
+        }
+        if (!WC()->cart->get_cart_hash()) {
+            WC()->cart->get_cart();
         }
 
         $space_id = $booking_data['space_id'];

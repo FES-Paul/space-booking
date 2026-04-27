@@ -63,7 +63,10 @@ if (is_admin()) {
 
 // ── Bootstrap ────────────────────────────────────────────────────────────────
 add_action('plugins_loaded', static function (): void {
-	\SpaceBooking\Plugin::instance()->boot();
+	$container = \SpaceBooking\Container::create();
+	$container->bind(\SpaceBooking\Plugin::class, \SpaceBooking\Plugin::class);
+	$plugin = $container->get(\SpaceBooking\Plugin::class);
+	$plugin->boot();
 });
 
 // ── Cron for cleaning expired bookings ────────────────────────────────

@@ -21,17 +21,10 @@ use SpaceBooking\CPT\SpaceCPT;
  */
 final class Plugin
 {
-    private static ?self $instance = null;
-
-    public static function instance(): self
+    public function __construct(Container $container)
     {
-        if (null === self::$instance) {
-            self::$instance = new self();
-        }
-        return self::$instance;
+        $this->container = $container;
     }
-
-    private function __construct() {}
 
     public function boot(): void
     {
@@ -39,9 +32,28 @@ final class Plugin
         $this->register_wc_hooks();
         $this->enqueue_assets();
         $this->register_admin();
+        $this->fix_script_modules();
 
         $this->init_boot();  // Run directly
         add_action('init', [$this, 'init_boot']);  // Also hook for future requests
+    }
+
+    public function register_module_filter(): void
+    {
+        add_filter('script_loader_tag', function ($tag, $handle, $src) {
+            if (strpos($tag, 'type="module"') !== false) {
+                return $tag;
+            }
+            if ('space-booking-app-js' === $handle || 'space-booking-app' === $handle) {
+                return str_replace('<script ', '<script type="module" ', $tag);
+            }
+            return $tag;
+        }, 10, 3);
+    }
+
+    private function fix_script_modules(): void
+    {
+        add_action('wp_enqueue_scripts', [$this, 'register_module_filter'], 1);
     }
 
     public function init_boot(): void
@@ -73,12 +85,13 @@ final class Plugin
     private function register_rest_api(): void
     {
         add_action('rest_api_init', static function (): void {
-            (new SpaceController())->register_routes();
-            (new AvailabilityController())->register_routes();
-            (new BookingController())->register_routes();
-            (new CustomerController())->register_routes();
-            (new PricingController())->register_routes();
-            (new CartController())->register_routes();
+            $container = \SpaceBooking\Container::instance();
+            $container->get(\SpaceBooking\Controllers\SpaceController::class)->register_routes();
+            $container->get(\SpaceBooking\Controllers\AvailabilityController::class)->register_routes();
+            $container->get(\SpaceBooking\Controllers\BookingController::class)->register_routes();
+            $container->get(\SpaceBooking\Controllers\CustomerController::class)->register_routes();
+            $container->get(\SpaceBooking\Controllers\PricingController::class)->register_routes();
+            $container->get(\SpaceBooking\Controllers\CartController::class)->register_routes();
         });
     }
 
@@ -118,8 +131,19 @@ final class Plugin
                 SB_ASSETS_URL . 'js/booking-app.js',
                 $asset['dependencies'],
                 $asset['version'],
-                true
+                true,
+                ['type' => 'module']
             );
+
+            $moduleFix = "
+document.addEventListener('DOMContentLoaded', function() {
+  const script = document.querySelector('#space-booking-app-js');
+  if (script && !script.type) {
+    script.type = 'module';
+  }
+});
+";
+            wp_add_inline_script('space-booking-app', $moduleFix, 'after');
 
             wp_localize_script(
                 'space-booking-app',
@@ -132,21 +156,6 @@ final class Plugin
                     'dateFormat' => get_option('date_format', 'Y-m-d'),
                     'bookingPolicy' => get_option('sb_booking_policy', ''),
                 ]
-            );
-
-            add_filter(
-                'script_loader_tag',
-                static function (string $tag, string $handle): string {
-                    if ('space-booking-app' !== $handle) {
-                        return $tag;
-                    }
-                    if (false !== strpos($tag, 'type=')) {
-                        return $tag;
-                    }
-                    return str_replace('<script ', '<script type="module" ', $tag);
-                },
-                10,
-                2
             );
         }
 
@@ -168,7 +177,8 @@ final class Plugin
                 SB_ASSETS_URL . 'js/lookup-app.js',
                 $asset['dependencies'],
                 $asset['version'],
-                true
+                true,
+                ['type' => 'module']
             );
 
             wp_localize_script(
@@ -179,21 +189,6 @@ final class Plugin
                     'nonce' => wp_create_nonce('wp_rest'),
                     'dateFormat' => get_option('date_format', 'Y-m-d'),
                 ]
-            );
-
-            add_filter(
-                'script_loader_tag',
-                static function (string $tag, string $handle): string {
-                    if ('sb-lookup-app' !== $handle) {
-                        return $tag;
-                    }
-                    if (false !== strpos($tag, 'type=')) {
-                        return $tag;
-                    }
-                    return str_replace('<script ', '<script type="module" ', $tag);
-                },
-                10,
-                2
             );
         }
     }
@@ -231,7 +226,7 @@ final class Plugin
         $status = isset($_GET['status']) ? sanitize_text_field($_GET['status']) : '';
 
         if ($booking_id > 0 && $status === 'in_review') {
-            $repo = new \SpaceBooking\Services\BookingRepository();
+            $repo = \SpaceBooking\Container::instance()->get(\SpaceBooking\Services\BookingRepository::class);
             $booking = $repo->find($booking_id);
 
             if ($booking && $booking['status'] === 'in_review') {
@@ -269,7 +264,7 @@ final class Plugin
     public function ajax_save_customer_fields(): void
     {
         check_ajax_referer('sb_export_import', '_wpnonce');
-        if (!current_user_can('manage_options')) {
+        if (!current_user_can('manage_space_bookings')) {
             wp_send_json_error('Unauthorized');
         }
 
@@ -292,7 +287,7 @@ final class Plugin
     {
         check_ajax_referer('sb_export_import', '_wpnonce');
 
-        if (!current_user_can('manage_options')) {
+        if (!current_user_can('manage_space_bookings')) {
             wp_die('Unauthorized');
         }
 
@@ -310,7 +305,7 @@ final class Plugin
     {
         check_ajax_referer('sb_export_import', '_wpnonce');
 
-        if (!current_user_can('manage_options')) {
+        if (!current_user_can('manage_space_bookings')) {
             wp_send_json_error('Unauthorized');
         }
 

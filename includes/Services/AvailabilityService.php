@@ -2,6 +2,7 @@
 
 namespace SpaceBooking\Services;
 
+use SpaceBooking\Services\Interfaces\BookingRepositoryInterface;
 use DateInterval;
 use DateTime;
 
@@ -13,12 +14,9 @@ use DateTime;
  */
 final class AvailabilityService
 {
-	private BookingRepository $repo;
-
-	public function __construct()
-	{
-		$this->repo = new BookingRepository();
-	}
+	public function __construct(
+		private BookingRepositoryInterface $repo
+	) {}
 
 	/**
 	 * Returns available slots as [ ['start' => '14:00', 'end' => '15:00', 'available' => true], ... ]

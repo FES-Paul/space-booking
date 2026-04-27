@@ -2,10 +2,10 @@
 
 namespace SpaceBooking\Controllers;
 
-use SpaceBooking\Services\BookingRepository;
-use SpaceBooking\Services\InventoryService;
-use SpaceBooking\Services\PricingService;
-use SpaceBooking\Services\StripeService;
+use SpaceBooking\Services\Interfaces\BookingRepositoryInterface;
+use SpaceBooking\Services\Interfaces\InventoryServiceInterface as InventoryService;
+use SpaceBooking\Services\Interfaces\PricingServiceInterface as PricingService;
+use SpaceBooking\Services\WooCommerceService;
 use WP_REST_Controller;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -13,23 +13,28 @@ use WP_REST_Server;
 
 /**
  * POST /space-booking/v1/bookings   → Create pending booking + PaymentIntent
+ * Updated to use Repository interface via DI.
  */
 final class BookingController extends WP_REST_Controller
 {
 	protected $namespace = 'space-booking/v1';
 	protected $rest_base = 'bookings';
 
-	private BookingRepository $repo;
+	private BookingRepositoryInterface $repo;
 	private InventoryService $inventory;
 	private PricingService $pricing;
-	private \SpaceBooking\Services\WooCommerceService $wc;
+	private WooCommerceService $wc;
 
-	public function __construct()
-	{
-		$this->repo = new BookingRepository();
-		$this->inventory = new InventoryService();
-		$this->pricing = new PricingService();
-		$this->wc = new \SpaceBooking\Services\WooCommerceService();
+	public function __construct(
+		BookingRepositoryInterface $repo,
+		InventoryService $inventory,
+		PricingService $pricing,
+		WooCommerceService $wc
+	) {
+		$this->repo = $repo;
+		$this->inventory = $inventory;
+		$this->pricing = $pricing;
+		$this->wc = $wc;
 	}
 
 	public function register_routes(): void
@@ -57,8 +62,6 @@ final class BookingController extends WP_REST_Controller
 		]);
 	}
 
-	// ── Get Booking Status ────────────────────────────────────────────────────
-
 	public function get_booking_status(WP_REST_Request $request): WP_REST_Response
 	{
 		$id = (int) $request->get_param('id');
@@ -74,8 +77,6 @@ final class BookingController extends WP_REST_Controller
 			'booking' => $booking
 		]);
 	}
-
-	// ── Create Booking ────────────────────────────────────────────────────────
 
 	public function create_booking(WP_REST_Request $request): WP_REST_Response
 	{
@@ -139,12 +140,12 @@ final class BookingController extends WP_REST_Controller
 				'notes' => $notes,
 				'extras' => $extras,
 			]);
-		} catch (\RuntimeException $e) {
+		} catch (RuntimeException $e) {
 			return new WP_REST_Response(['message' => 'Could not save booking.'], 500);
 		}
 
 		// ── Add to WooCommerce cart or session ────────────────────────────────
-		$checkout_url = wc_get_cart_url();  // Default to cart
+		$checkout_url = wc_get_cart_url();
 		$cart_added = false;
 		try {
 			$checkout_url = $this->wc->add_booking_to_cart([
@@ -160,9 +161,8 @@ final class BookingController extends WP_REST_Controller
 			], $price['total_price'], $booking_id);
 			$cart_added = true;
 			error_log('SpaceBooking: Booking #' . $booking_id . ' added to cart directly');
-		} catch (\RuntimeException $e) {
+		} catch (RuntimeException $e) {
 			error_log('SpaceBooking: Direct cart add failed for #' . $booking_id . ': ' . $e->getMessage());
-			// Fallback: Use transient + session link for checkout page
 			$pending_data = [
 				'booking_data' => [
 					'space_id' => $space_id,
@@ -177,15 +177,13 @@ final class BookingController extends WP_REST_Controller
 				],
 				'total_price' => $price['total_price'],
 			];
-			set_transient('sb_pending_checkout_' . $booking_id, $pending_data, 1800);  // 30 min
-			error_log('SpaceBooking: Booking #' . $booking_id . ' stored in transient (session unavailable in REST)');
-			// Session set removed - using transient fallback in populate_pending_cart()
+			set_transient('sb_pending_checkout_' . $booking_id, $pending_data, 1800);
+			error_log('SpaceBooking: Booking #' . $booking_id . ' stored in transient');
 		}
 
-		// Always redirect to checkout, not cart
 		$checkout_url = wc_get_checkout_url();
 
-		error_log('SpaceBooking: Booking #' . $booking_id . ' → checkout_url: ' . $checkout_url . ' (cart_direct: ' . json_encode($cart_added) . ')');
+		error_log('SpaceBooking: Booking #' . $booking_id . ' → checkout_url: ' . $checkout_url);
 
 		return new WP_REST_Response([
 			'booking_id' => $booking_id,
@@ -195,8 +193,6 @@ final class BookingController extends WP_REST_Controller
 			'cart_added_directly' => $cart_added,
 		], 201);
 	}
-
-	// ── Get single booking ────────────────────────────────────────────────────
 
 	public function get_booking(WP_REST_Request $request): WP_REST_Response
 	{
@@ -209,8 +205,6 @@ final class BookingController extends WP_REST_Controller
 
 		return rest_ensure_response($booking);
 	}
-
-	// ── Arg schema ───────────────────────────────────────────────────────────
 
 	private function get_create_args(): array
 	{

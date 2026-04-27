@@ -2,32 +2,18 @@
 
 namespace SpaceBooking\Services;
 
+use SpaceBooking\Services\Interfaces\PricingServiceInterface;
 use DateTime;
 
-/**
- * Calculates booking prices using the priority hierarchy:
- *   1. Package flat price  (overrides everything)
- *   2. Base rate × duration
- *   3. Temporal modifiers (holiday > specific_date > weekend > night)
- *   4. Extras
- */
-final class PricingService
+final class PricingService implements PricingServiceInterface
 {
-	/**
-	 * @param int    $space_id
-	 * @param string $date        Y-m-d
-	 * @param string $start_time  H:i
-	 * @param string $end_time    H:i
-	 * @param array  $extras      [ ['extra_id' => int, 'quantity' => int], ... ]
-	 * @param int|null $package_id
-	 * @return array {
-	 *   base_price: float,
-	 *   modifier_price: float,
-	 *   extras_price: float,
-	 *   total_price: float,
-	 *   breakdown: array,
-	 * }
-	 */
+	private DatabaseService $db;
+
+	public function __construct(DatabaseService $db = null)
+	{
+		$this->db = $db ?: new DatabaseService();
+	}
+
 	public function calculate(
 		int $space_id,
 		string $date,
@@ -38,29 +24,26 @@ final class PricingService
 	): array {
 		$duration_hours = $this->hours_between($start_time, $end_time);
 
-		// ── Package shortcut ──────────────────────────────────────────────────
 		if ($package_id) {
 			$package_price = (float) get_post_meta($package_id, '_sb_package_price', true);
 			$extras_price = $this->calculate_extras($extras);
 			$total = $package_price + $extras_price;
 
-			$display_duration = $duration_hours;
 			return [
 				'base_price' => $package_price,
 				'modifier_price' => 0.0,
 				'extras_price' => $extras_price,
 				'total_price' => $total,
 				'duration_hours' => $duration_hours,
-				'display_duration' => round($display_duration, 1),
+				'display_duration' => round($duration_hours, 1),
 				'breakdown' => [
 					['label' => 'Package price', 'amount' => $package_price],
 					['label' => 'Extras', 'amount' => $extras_price],
-					['label' => 'Total booking time', 'amount' => 0, 'info' => sprintf('%.1fh', $display_duration)],
+					['label' => 'Total booking time', 'amount' => 0, 'info' => sprintf('%.1fh', round($duration_hours, 1))],
 				],
 			];
 		}
 
-		// ── Price override segments ────────────────────────────────────────────
 		$segments = $this->get_price_segments($space_id, $date, $start_time, $end_time);
 
 		$base_price = 0.0;
@@ -79,19 +62,15 @@ final class PricingService
 			];
 		}
 
-		// Apply temporal modifiers (to total base)
-		[$modifier_price, $breakdown_modifiers] = $this->apply_modifiers(
-			$space_id, $date, $start_time, $end_time, $base_price
-		);
+		[$modifier_price, $breakdown_modifiers] = $this->apply_modifiers($space_id, $date, $start_time, $end_time, $base_price);
 
-		$display_duration = $duration_hours;
 		$extras_price = $this->calculate_extras($extras);
 		$total = $base_price + $modifier_price + $extras_price;
 
 		$breakdown = array_merge(
 			$base_breakdown,
 			$breakdown_modifiers,
-			($extras_price > 0 ? [['label' => 'Extras', 'amount' => $extras_price]] : [])
+			$extras_price > 0 ? [['label' => 'Extras', 'amount' => $extras_price]] : []
 		);
 
 		return [
@@ -100,16 +79,11 @@ final class PricingService
 			'extras_price' => $extras_price,
 			'total_price' => round($total, 2),
 			'duration_hours' => $duration_hours,
-			'display_duration' => round($display_duration, 1),
+			'display_duration' => round($duration_hours, 1),
 			'breakdown' => $breakdown,
 		];
 	}
 
-	// ── Temporal modifiers ───────────────────────────────────────────────────
-
-	/**
-	 * Returns [ total_modifier_amount, breakdown_array ]
-	 */
 	private function apply_modifiers(
 		int $space_id,
 		string $date,
@@ -117,22 +91,17 @@ final class PricingService
 		string $end_time,
 		float $base_price
 	): array {
-		global $wpdb;
-
-		// Fetch applicable rules ordered by priority DESC (higher = applied first)
-		$rules = $wpdb->get_results($wpdb->prepare(
-			"SELECT * FROM {$wpdb->prefix}sb_pricing_rules
-		\t WHERE is_active = 1
-		\t   AND (space_id IS NULL OR space_id = %d)
-		\t ORDER BY priority DESC",
-			$space_id
-		), ARRAY_A);
+		$prefix = $this->db->getPrefix();
+		$rules = $this->db->select("
+            SELECT * FROM {$prefix}sb_pricing_rules
+            WHERE is_active = 1 AND (space_id IS NULL OR space_id = %d)
+            ORDER BY priority DESC
+        ", [$space_id]);
 
 		$dt = new DateTime($date);
-		$day_of_week = (int) $dt->format('w');  // 0=Sun … 6=Sat
+		$day_of_week = (int) $dt->format('w');
 		$date_str = $dt->format('Y-m-d');
 
-		// Priority rank: holiday=40, date_specific=30, weekend=20, night/day=10
 		$priority_map = [
 			'holiday' => 40,
 			'date_specific' => 30,
@@ -143,22 +112,17 @@ final class PricingService
 			'day' => 10,
 		];
 
-		$applied = [];
 		$applied_rank = 0;
 		$modifier_sum = 0.0;
 		$breakdown = [];
 
 		foreach ($rules as $rule) {
 			$rank = $priority_map[$rule['rule_type']] ?? 0;
-
-			// Don't apply lower-priority rules if we already have a higher one
-			if ($rank < $applied_rank && !empty($applied)) {
+			if ($rank < $applied_rank)
 				continue;
-			}
 
-			if (!$this->rule_matches($rule, $date_str, $day_of_week, $start_time, $end_time)) {
+			if (!$this->rule_matches($rule, $date_str, $day_of_week, $start_time, $end_time))
 				continue;
-			}
 
 			$amount = $rule['modifier'] === 'percent'
 				? round($base_price * ((float) $rule['value'] / 100), 2)
@@ -166,59 +130,41 @@ final class PricingService
 
 			$modifier_sum += $amount;
 			$applied_rank = $rank;
-			$symbol = \SpaceBooking\Services\CurrencyService::get_symbol();
 			$breakdown[] = [
 				'label' => $rule['label'] ?? ucfirst(str_replace('_', ' ', $rule['rule_type'])),
 				'amount' => $amount,
 			];
-
-			$applied[] = $rule['id'];
 		}
 
 		return [$modifier_sum, $breakdown];
 	}
 
-	private function rule_matches(
-		array $rule,
-		string $date,
-		int $day_of_week,
-		string $start_time,
-		string $end_time
-	): bool {
+	private function rule_matches(array $rule, string $date, int $day_of_week, string $start_time, string $end_time): bool
+	{
 		switch ($rule['rule_type']) {
 			case 'holiday':
 			case 'date_specific':
 				return $rule['start_date'] === $date;
-
 			case 'date_range':
 				return ($rule['start_date'] <= $date && $date <= $rule['end_date']);
-
 			case 'weekend':
-				return in_array($day_of_week, [0, 6], true);  // Sun or Sat
-
+				return in_array($day_of_week, [0, 6]);
 			case 'weekday':
-				return !in_array($day_of_week, [0, 6], true);
-
+				return !in_array($day_of_week, [0, 6]);
 			case 'night':
-				// Night: booking start overlaps the rule's night window
 				return ($rule['start_time'] && $start_time >= $rule['start_time']) ||
 					($rule['end_time'] && $end_time <= $rule['end_time']);
-
 			case 'day':
 				return (!$rule['start_time'] || $start_time >= $rule['start_time']) &&
 					(!$rule['end_time'] || $end_time <= $rule['end_time']);
-
 			default:
-				// days_of_week CSV check
 				if ($rule['days_of_week']) {
 					$days = array_map('intval', explode(',', $rule['days_of_week']));
-					return in_array($day_of_week, $days, true);
+					return in_array($day_of_week, $days);
 				}
 		}
 		return false;
 	}
-
-	// ── Extras ───────────────────────────────────────────────────────────────
 
 	private function calculate_extras(array $extras): float
 	{
@@ -230,8 +176,6 @@ final class PricingService
 		}
 		return round($total, 2);
 	}
-
-	// ── Helpers ───────────────────────────────────────────────────────────────
 
 	private function get_price_segments(int $space_id, string $date, string $start_time, string $end_time): array
 	{
@@ -251,7 +195,7 @@ final class PricingService
 
 		foreach ($overrides as $ov) {
 			$ov_days = $ov['days'] ?? [];
-			$date_wday = (new DateTime($date))->format('w');  // 0=Sun..6=Sat
+			$date_wday = (new DateTime($date))->format('w');
 			if (!in_array((int) $date_wday, $ov_days))
 				continue;
 
@@ -261,12 +205,10 @@ final class PricingService
 			$new_segments = [];
 			foreach ($segments as $seg) {
 				if ($seg['end_min'] <= $ov_start_min || $seg['start_min'] >= $ov_end_min) {
-					// No overlap
 					$new_segments[] = $seg;
 					continue;
 				}
 
-				// Pre-overlap
 				if ($seg['start_min'] < $ov_start_min) {
 					$new_segments[] = [
 						'start_min' => $seg['start_min'],
@@ -277,7 +219,6 @@ final class PricingService
 					];
 				}
 
-				// Overlap
 				$overlap_start = max($seg['start_min'], $ov_start_min);
 				$overlap_end = min($seg['end_min'], $ov_end_min);
 				$new_segments[] = [
@@ -288,7 +229,6 @@ final class PricingService
 					'rate' => (float) $ov['hourly_rate']
 				];
 
-				// Post-overlap
 				if ($seg['end_min'] > $ov_end_min) {
 					$new_segments[] = [
 						'start_min' => $ov_end_min,
@@ -302,7 +242,6 @@ final class PricingService
 			$segments = $new_segments;
 		}
 
-		// Merge adjacent same-rate segments
 		return $this->merge_segments($segments);
 	}
 
@@ -330,9 +269,7 @@ final class PricingService
 		foreach ($segments as $curr) {
 			$last = &$merged[count($merged) - 1];
 
-			// Merge if overlapping/adjacent OR duplicate AND same rate
-			if ($last['rate'] === $curr['rate'] &&
-					($last['end_min'] >= $curr['start_min'])) {
+			if ($last['rate'] === $curr['rate'] && $last['end_min'] >= $curr['start_min']) {
 				$last['end_min'] = max($last['end_min'], $curr['end_min']);
 				$last['end_time'] = $this->minutes_to_time($last['end_min']);
 			} else {

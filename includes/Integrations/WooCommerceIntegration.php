@@ -132,17 +132,16 @@ final class WooCommerceIntegration
             $transients = get_transient('sb_pending_checkout_list');
             if (!$transients) {
                 $all_transients = [];
-                global $wpdb;
-                $results = $wpdb->get_results("
-                    SELECT option_name, option_value 
-                    FROM {$wpdb->options} 
-                    WHERE option_name LIKE '_transient_sb_pending_checkout_%' 
-                    AND option_value != ''
-                    ORDER BY option_id DESC 
-                    LIMIT 5
-                ");
+                $db = new \SpaceBooking\Services\DatabaseService();
+                $results = $db->select("
+                SELECT option_name, option_value 
+                FROM {$db->getPrefix()}options 
+                WHERE option_name LIKE %s
+                ORDER BY option_id DESC 
+                LIMIT 5
+            ", ['_transient_sb_pending_checkout_%']);
                 foreach ($results as $row) {
-                    $id = str_replace('_transient_sb_pending_checkout_', '', $row->option_name);
+                    $id = str_replace('_transient_sb_pending_checkout_', '', $row['option_name']);
                     if (is_numeric($id)) {
                         $all_transients[] = (int) $id;
                     }

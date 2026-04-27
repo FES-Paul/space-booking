@@ -164,93 +164,21 @@ defined('ABSPATH') || exit;
         <div class="sb-calendar-grouped">
 
             <?php
-            global $wpdb;
-            $where = ['1=1'];
-            $params = [];
-            $status_input = sanitize_text_field($_GET['status'] ?? '');
-            if ($status_input) {
-                $where[] = 'b.status = %s';
-                $params[] = $status_input;
+            $repo = new \SpaceBooking\Services\BookingRepository();
+            $filters = [];
+            if ($status = sanitize_text_field($_GET['status'] ?? '')) {
+                $filters['status'] = $status;
             }
-            $space_id_input = $_GET['space_id'] ?? '';
-            $space_id = absint($space_id_input);
-            if ($space_id) {
-                $where[] = 'b.space_id = %d';
-                $params[] = $space_id;
+            if ($space_id = absint($_GET['space_id'] ?? '')) {
+                $filters['space_id'] = $space_id;
             }
-            $date_from_input = sanitize_text_field($_GET['date_from'] ?? '');
-            if ($date_from_input) {
-                $date_from = date('Y-m-d', strtotime($date_from_input));
-                if ($date_from) {
-                    $where[] = 'b.booking_date >= %s';
-                    $params[] = $date_from;
-                }
+            if ($date_from_input = sanitize_text_field($_GET['date_from'] ?? '')) {
+                $filters['date_from'] = date('Y-m-d', strtotime($date_from_input));
             }
-            $date_to_input = sanitize_text_field($_GET['date_to'] ?? '');
-            if ($date_to_input) {
-                $date_to = date('Y-m-d', strtotime($date_to_input));
-                if ($date_to) {
-                    $where[] = 'b.booking_date <= %s';
-                    $params[] = $date_to;
-                }
+            if ($date_to_input = sanitize_text_field($_GET['date_to'] ?? '')) {
+                $filters['date_to'] = date('Y-m-d', strtotime($date_to_input));
             }
-            if (empty($date_from_input)) {
-                $where[] = 'b.booking_date >= DATE_SUB(CURDATE(), INTERVAL 36 MONTH)';
-            }
-            if (empty($date_to_input)) {
-                $where[] = 'b.booking_date <= DATE_ADD(CURDATE(), INTERVAL 36 MONTH)';
-            }
-            if ($status_input && $status_input !== 'pending') {
-                $where[] = '(b.status != "pending" OR b.expired_at > NOW())';
-            }
-            $bookings = $wpdb->get_results($wpdb->prepare(
-                "SELECT b.*, p.post_title AS space_name FROM {$wpdb->prefix}sb_bookings b 
-             LEFT JOIN {$wpdb->posts} p ON p.ID = b.space_id 
-             WHERE " . implode(' AND ', $where) . ' 
-             ORDER BY b.booking_date, b.start_time',
-                ...$params
-            ), ARRAY_A) ?: [];
-
-            $grouped = [];
-            foreach ($bookings as $b) {
-                $date = new DateTime($b['booking_date']);
-                $month_key = $date->format('Y-m');
-                $month_name = $date->format('F Y');
-                $day = $date->format('j');
-                $grouped[$month_key]['name'] = $month_name;
-                $grouped[$month_key]['days'][$b['booking_date']]['day'] = $date->format('M j');
-                $grouped[$month_key]['days'][$b['booking_date']]['bookings'][] = $b;
-            }
-
-            if (empty($grouped)) {
-                echo '<p>' . esc_html__('No bookings match your filters.', 'space-booking') . '</p>';
-            } else {
-                foreach ($grouped as $month_data) {
-                    echo '<section class="sb-month-section">';
-                    echo '<h3>' . esc_html($month_data['name']) . '</h3>';
-                    echo '<div class="sb-calendar-grid">';
-                    $days_in_month = array_keys($month_data['days']);
-                    sort($days_in_month);
-                    foreach ($days_in_month as $date) {
-                        $day_data = $month_data['days'][$date];
-                        echo '<div class="sb-day-cell">';
-                        echo '<div class="sb-day-header">' . esc_html($day_data['day']) . '</div>';
-                        if (!empty($day_data['bookings'])) {
-                            foreach ($day_data['bookings'] as $b) {
-                                $time = substr($b['start_time'], 0, 5) . '-' . substr($b['end_time'], 0, 5);
-                                $edit_url = admin_url('admin.php?page=space-booking-bookings&edit=' . $b['id']);
-                                echo '<a href="' . esc_url($edit_url) . '" class="sb-booking" style="text-decoration:none; color:inherit; display:block;">';
-                                echo esc_html($time . ' - ' . $b['customer_name']);
-                                echo ' <span class="sb-status sb-status--' . esc_attr($b['status']) . '">' . str_replace('_', ' ', esc_html(ucfirst($b['status']))) . '</span>';
-                                echo '</a>';
-                            }
-                        }
-                        echo '</div>';
-                    }
-                    echo '</div>';
-                    echo '</section>';
-                }
-            }
+            (new \SpaceBooking\Admin\Views\BookingsList($repo))->render($filters);
             ?>
         </div>
     </div>

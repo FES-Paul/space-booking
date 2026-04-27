@@ -1,196 +1,30 @@
-<?php
-/** Single Booking Edit Page */
-defined('ABSPATH') || exit;
+<?php declare(strict_types=1);
 
-// Get booking ID from URL
-$booking_id = absint($_GET['edit'] ?? 0);
+namespace SpaceBooking\Admin\Views;
 
-if (!$booking_id) {
-    wp_die('Invalid booking ID.');
-}
+use SpaceBooking\Services\BookingRepository;
 
-$repo = new \SpaceBooking\Services\BookingRepository();
-(new \SpaceBooking\Admin\Views\BookingsEdit($repo))->render($booking_id);
+final class BookingsEdit
+{
+    public function __construct(
+        private BookingRepository $repo
+    ) {}
 
-// Status options
-$statuses = ['pending' => 'Pending', 'in_review' => 'In Review', 'confirmed' => 'Confirmed'];
-$status_color = [
-    'pending' => '#fff3cd',
-    'in_review' => '#cce5ff',
-    'confirmed' => '#d4edda'
-];
+    public function render(int $booking_id): void
+    {
+        $booking = $this->repo->findEnriched($booking_id);
+        if (!$booking) {
+            wp_die('Booking not found.');
+        }
+
+        $extras = $this->repo->get_extras($booking_id);
+        $statuses = ['pending' => 'Pending', 'in_review' => 'In Review', 'confirmed' => 'Confirmed'];
+        $status_color = [
+            'pending' => '#fff3cd',
+            'in_review' => '#cce5ff',
+            'confirmed' => '#d4edda'
+        ];
 ?>
-<style>
-.sb-booking-edit {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto;
-    max-width: 900px;
-    margin: 20px 0;
-}
-
-.sb-section {
-    background: #fff;
-    border: 1px solid #c3c4c7;
-    border-radius: 6px;
-    margin-bottom: 24px;
-    padding: 24px;
-}
-
-.sb-section h3 {
-    margin: 0 0 16px;
-    color: #1d2327;
-    border-bottom: 2px solid #2271b1;
-    padding-bottom: 8px;
-}
-
-.sb-info-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 16px;
-    margin: 16px 0;
-}
-
-.sb-info-row strong {
-    color: #1d2327;
-}
-
-.sb-price-breakdown {
-    background: #f6f7f7;
-    padding: 16px;
-    border-radius: 4px;
-}
-
-.sb-extras-list {
-    list-style: none;
-    padding: 0;
-}
-
-.sb-extra-item {
-    display: flex;
-    justify-content: space-between;
-    padding: 8px 0;
-    border-bottom: 1px solid #eee;
-}
-
-.sb-status-badge {
-    padding: 4px 12px;
-    border-radius: 20px;
-    font-weight: 500;
-    font-size: 13px;
-    text-transform: uppercase;
-}
-
-.sb-edit-form {
-    background: #f9fbfe;
-    padding: 20px;
-    border-radius: 6px;
-}
-
-.sb-form-row {
-    display: flex;
-    gap: 16px;
-    align-items: end;
-    margin-bottom: 16px;
-}
-
-.sb-form-group {
-    flex: 1;
-}
-
-.sb-form-group label {
-    display: block;
-    font-weight: 600;
-    margin-bottom: 4px;
-}
-
-.sb-form-group select,
-.sb-form-group textarea {
-    width: 100%;
-    padding: 10px;
-    border: 1px solid #8c8f94;
-    border-radius: 4px;
-    font-size: 14px;
-}
-
-.sb-actions {
-    display: flex;
-    gap: 12px;
-}
-
-.btn {
-    padding: 10px 20px;
-    border: 0;
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: 500;
-    text-decoration: none;
-    display: inline-block;
-}
-
-.btn-primary {
-    background: #2271b1;
-    color: #fff;
-}
-
-.btn-primary:hover {
-    background: #135e96;
-}
-
-.btn-secondary {
-    background: #646970;
-    color: #fff;
-}
-
-.btn-secondary:hover {
-    background: #50565b;
-}
-
-#sb-status-preview {
-    min-height: 40px;
-    padding: 10px;
-    background: #f0f0f1;
-    border-radius: 4px;
-    margin-top: 8px;
-}
-
-.loading {
-    opacity: 0.6;
-    pointer-events: none;
-}
-
-.success {
-    color: #00a32a;
-    background: #d4edda;
-}
-
-.error {
-    color: #d63638;
-    background: #f4acb7;
-}
-
-.toast {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    padding: 16px 20px;
-    border-radius: 4px;
-    color: #fff;
-    z-index: 9999;
-    transform: translateX(400px);
-    transition: transform .3s;
-}
-
-@media (max-width:768px) {
-    .sb-info-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .sb-form-row {
-        flex-direction: column;
-        align-items: stretch;
-    }
-}
-</style>
-
 <div class="sb-booking-edit">
     <div style="display:flex; align-items:center; gap:16px; margin-bottom:24px;">
         <a href="<?php echo esc_url(remove_query_arg('edit')); ?>" class="btn btn-secondary">← Back to Bookings</a>
@@ -342,3 +176,7 @@ jQuery(document).ready(function($) {
     }
 });
 </script>
+<?php
+    }
+}
+?>
