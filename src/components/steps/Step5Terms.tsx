@@ -253,8 +253,8 @@ export function Step5Terms() {
               }}
             >
               By proceeding, you acknowledge that you have read and fully
-              understood the terms of this policy and accept any associated
-              legal liabilities.
+              understood the terms of this policy because you will be held
+              liable.
             </p>
 
             <div
