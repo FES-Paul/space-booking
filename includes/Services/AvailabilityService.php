@@ -33,9 +33,22 @@ final class AvailabilityService
 	 */
 	public function get_fixed_slots(int $space_id, string $date): array
 	{
-		$fixed_slots = get_post_meta($space_id, '_sb_fixed_slots', true);
-		if (!is_array($fixed_slots) || empty($fixed_slots)) {
-			return [];  // No fixed slots defined
+		$date_overrides = get_post_meta($space_id, '_sb_date_overrides', true);
+		if (is_array($date_overrides) && isset($date_overrides[$date])) {
+			$override = $date_overrides[$date];
+			if ($override['status'] === 'closed') {
+				return [];
+			}
+			if ($override['status'] === 'custom' && !empty($override['slots'])) {
+				$fixed_slots = $override['slots'];
+			} else {
+				return [];
+			}
+		} else {
+			$fixed_slots = get_post_meta($space_id, '_sb_fixed_slots', true);
+			if (!is_array($fixed_slots) || empty($fixed_slots)) {
+				return [];  // No fixed slots defined
+			}
 		}
 
 		$booked_intervals = $this->repo->get_confirmed_intervals($space_id, $date);
@@ -59,7 +72,8 @@ final class AvailabilityService
 				'available' => $is_available,
 				'override_price' => $slot_data['override_price'],
 				'pre_buffer' => $pre_buf,
-				'post_buffer' => $post_buf
+				'post_buffer' => $post_buf,
+				'capacity' => $slot_data['capacity'] ?? 1
 			];
 		}
 

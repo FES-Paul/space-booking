@@ -261,6 +261,76 @@ final class SpaceMetaBox
     </div>
     <button type="button" id="sb-add-fixed-slot"
         class="button"><?php esc_html_e('Add Fixed Slot', 'space-booking'); ?></button>
+
+    <!-- SPECIAL DATE OVERRIDES REPEATER -->
+    <h4><?php esc_html_e('Special Date Overrides', 'space-booking'); ?></h4>
+    <p class="description">
+        <?php esc_html_e('Override slots for specific dates (holidays, events). Higher priority than fixed slots.', 'space-booking'); ?>
+    </p>
+
+    <div id="sb-date-overrides-container">
+        <div class="sb-date-header"
+            style="display: grid; grid-template-columns: 140px 120px 40px auto; gap: 12px; align-items: center; padding: 8px 0; font-weight: 600; border-bottom: 2px solid #ddd; margin-bottom: 8px;">
+            <span>Date</span>
+            <span>Status</span>
+            <span></span>
+            <span>Slots</span>
+        </div>
+        <div id="sb-date-overrides">
+            <?php
+            $date_overrides = get_post_meta($post->ID, '_sb_date_overrides', true);
+            if (!is_array($date_overrides))
+                $date_overrides = [];
+            foreach ($date_overrides as $target_date => $override):
+                ?>
+            <div class="sb-date-row" data-date="<?php echo esc_attr($target_date); ?>">
+                <input type="date" name="sb_date_overrides[<?php echo esc_attr($target_date); ?>][date]"
+                    value="<?php echo esc_attr($target_date); ?>" required style="width:130px;">
+                <select name="sb_date_overrides[<?php echo esc_attr($target_date); ?>][status]" style="width:110px;">
+                    <option value="custom" <?php selected($override['status'] ?? 'custom', 'custom'); ?>>Custom Slots
+                    </option>
+                    <option value="closed" <?php selected($override['status'] ?? '', 'closed'); ?>>Closed</option>
+                </select>
+                <button type="button" class="button-link sb-copy-default"
+                    data-date="<?php echo esc_attr($target_date); ?>" style="font-size:12px;">Copy Default</button>
+                <button type="button" class="button-link sb-remove-date" style="color:#d63638;">×</button>
+                <div class="sb-date-slots" style="margin-left: 20px; margin-top: 8px;">
+                    <?php if (isset($override['slots']) && is_array($override['slots'])): ?>
+                    <?php foreach ($override['slots'] as $i => $slot): ?>
+                    <div class="sb-date-slot-row sb-slot-row" data-slot-i="<?php echo $i; ?>"
+                        style="display: grid; grid-template-columns: 80px 100px 100px 80px 120px 80px auto; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid #ddd;">
+                        <input type="number"
+                            name="sb_date_overrides[<?php echo esc_attr($target_date); ?>][slots][<?php echo $i; ?>][pre_buffer]"
+                            min="0" placeholder="0" value="<?php echo esc_attr($slot['pre_buffer'] ?? ''); ?>"
+                            style="width:70px;">
+                        <input type="time"
+                            name="sb_date_overrides[<?php echo esc_attr($target_date); ?>][slots][<?php echo $i; ?>][start_time]"
+                            required value="<?php echo esc_attr($slot['start_time'] ?? ''); ?>">
+                        <input type="time"
+                            name="sb_date_overrides[<?php echo esc_attr($target_date); ?>][slots][<?php echo $i; ?>][end_time]"
+                            required value="<?php echo esc_attr($slot['end_time'] ?? ''); ?>">
+                        <input type="number"
+                            name="sb_date_overrides[<?php echo esc_attr($target_date); ?>][slots][<?php echo $i; ?>][post_buffer]"
+                            min="0" placeholder="0" value="<?php echo esc_attr($slot['post_buffer'] ?? ''); ?>"
+                            style="width:70px;">
+                        <input type="number"
+                            name="sb_date_overrides[<?php echo esc_attr($target_date); ?>][slots][<?php echo $i; ?>][override_price]"
+                            step="0.01" min="0" placeholder=""
+                            value="<?php echo esc_attr($slot['override_price'] ?? ''); ?>" style="width:100px;">
+                        <input type="number"
+                            name="sb_date_overrides[<?php echo esc_attr($target_date); ?>][slots][<?php echo $i; ?>][capacity]"
+                            min="1" value="<?php echo esc_attr($slot['capacity'] ?? 1); ?>" style="width:70px;">
+                        <button type="button" class="button-link sb-remove-date-slot" style="color:#d63638;">×</button>
+                    </div>
+                    <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+    <button type="button" id="sb-add-date-override"
+        class="button"><?php esc_html_e('Add Date Override', 'space-booking'); ?></button>
 </div>
 
 <script>
@@ -300,6 +370,53 @@ jQuery(document).ready(function($) {
 
     // Fixed slots JS
     let fixedSlotIndex = <?php echo count($fixed_slots); ?>;
+    let dateOverrideIndex = 0;
+    const fixedSlotsTemplate = $('#sb-fixed-slots .sb-slot-row').length ? $(
+        '#sb-fixed-slots .sb-slot-row:first').prop('outerHTML').replace(/sb_fixed_slots/g,
+        'sb_date_overrides[PLACEHOLDER_DATE][slots]').replace(/\[\d+\]/g, '[PLACEHOLDER_I]') : '';
+
+    $('#sb-add-date-override').click(function() {
+        const dateStr = `override_${dateOverrideIndex}`;
+        const row = `
+            <div class="sb-date-row" data-date="${dateStr}">
+                <input type="date" name="sb_date_overrides[${dateStr}][date]" required style="width:130px;">
+                <select name="sb_date_overrides[${dateStr}][status]" style="width:110px;">
+                    <option value="custom">Custom Slots</option>
+                    <option value="closed">Closed</option>
+                </select>
+                <button type="button" class="button-link sb-copy-default" data-date="${dateStr}" style="font-size:12px;">Copy Default</button>
+                <button type="button" class="button-link sb-remove-date" style="color:#d63638;">×</button>
+                <div class="sb-date-slots" style="margin-left: 20px; margin-top: 8px;"></div>
+            </div>`;
+        $('#sb-date-overrides').append(row);
+        dateOverrideIndex++;
+    });
+
+    $(document).on('click', '.sb-remove-date', function() {
+        $(this).closest('.sb-date-row').remove();
+    });
+
+    $(document).on('click', '.sb-copy-default', function() {
+        const dateKey = $(this).data('date');
+        const slotsContainer = $(`[data-date="${dateKey}"] .sb-date-slots`);
+        $('#sb-fixed-slots .sb-slot-row').clone().each(function() {
+            const cloned = $(this).clone();
+            cloned.find('input[name]').each(function() {
+                let name = $(this).attr('name');
+                name = name.replace('sb_fixed_slots',
+                    `sb_date_overrides[${dateKey}][slots]`);
+                $(this).attr('name', name);
+            });
+            cloned.removeClass('sb-slot-row').addClass('sb-date-slot-row sb-slot-row');
+            cloned.find('.sb-remove-slot').addClass('sb-remove-date-slot').removeClass(
+                'sb-remove-slot');
+            slotsContainer.append(cloned);
+        });
+    });
+
+    $(document).on('click', '.sb-remove-date-slot', function() {
+        $(this).closest('.sb-date-slot-row').remove();
+    });
     $('#sb-add-fixed-slot').click(function() {
         const row = `
             <div class="sb-slot-row" style="display: grid; grid-template-columns: 80px 100px 100px 80px 120px 80px auto; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid #ddd;">
@@ -449,6 +566,89 @@ jQuery(document).ready(function($) {
         }
 
         update_post_meta($post_id, '_sb_fixed_slots', $clean_fixed_slots);
+
+        // DATE OVERRIDES - validate dates, slots, warn on existing bookings
+        $raw_date_overrides = $_POST['sb_date_overrides'] ?? [];
+        $overrides = [];
+        $repo = new \SpaceBooking\Services\BookingRepository();
+
+        foreach ($raw_date_overrides as $submitted_key => $data) {
+            $date_input = sanitize_text_field($data['date'] ?? '');
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date_input)) {
+                add_settings_error('sb_space', 'invalid_date', "Invalid date format for {$date_input}. Use YYYY-MM-DD.", 'error');
+                continue;
+            }
+
+            $status = sanitize_text_field($data['status'] ?? 'custom');
+            $target_date = $date_input;
+
+            // Check existing bookings
+            $booked_intervals = $repo->get_confirmed_intervals($post_id, $target_date);
+            $booking_count = count($booked_intervals);
+            if ($booking_count > 0) {
+                $warning = "Date {$target_date} has {$booking_count} existing booking(s). ";
+                if ($status === 'closed') {
+                    $warning .= 'These will not be cancelled automatically.';
+                } else {
+                    $warning .= 'Custom slots may conflict with them.';
+                }
+                add_settings_error('sb_space', 'existing_bookings', $warning, 'warning');
+            }
+
+            if ($status === 'closed') {
+                $overrides[$target_date] = ['status' => 'closed', 'slots' => []];
+                continue;
+            }
+
+            // Validate custom slots like fixed slots
+            $raw_slots = $data['slots'] ?? [];
+            $clean_date_slots = [];
+            $slot_footprints = [];
+
+            foreach ($raw_slots as $raw_slot) {
+                $pre_buf = !empty($raw_slot['pre_buffer']) ? (int) $raw_slot['pre_buffer'] : null;
+                $post_buf = !empty($raw_slot['post_buffer']) ? (int) $raw_slot['post_buffer'] : null;
+                $start_time = sanitize_text_field($raw_slot['start_time'] ?? '');
+                $end_time = sanitize_text_field($raw_slot['end_time'] ?? '');
+                $override_price = !empty($raw_slot['override_price']) ? (float) $raw_slot['override_price'] : null;
+                $capacity = max(1, (int) ($raw_slot['capacity'] ?? 1));
+
+                if (empty($start_time) || empty($end_time))
+                    continue;
+
+                $start_min = self::time_to_minutes($start_time);
+                $end_min = self::time_to_minutes($end_time);
+
+                if ($start_min >= $end_min) {
+                    add_settings_error('sb_space', 'invalid_date_slot_time', 'Date slot start must be before end.', 'error');
+                    continue 2;  // skip this date
+                }
+
+                // Overlap within this date's slots
+                foreach ($clean_date_slots as $existing) {
+                    $exist_start = self::time_to_minutes($existing['start_time']);
+                    $exist_end = self::time_to_minutes($existing['end_time']);
+                    if ($start_min < $exist_end && $end_min > $exist_start) {
+                        add_settings_error('sb_space', 'date_slot_overlap', 'Date override slots cannot overlap.', 'error');
+                        continue 2;
+                    }
+                }
+
+                $clean_date_slots[] = [
+                    'slot_id' => 'date_' . uniqid(),  // unique prefix
+                    'start_time' => $start_time,
+                    'end_time' => $end_time,
+                    'pre_buffer' => $pre_buf,
+                    'post_buffer' => $post_buf,
+                    'override_price' => $override_price,
+                    'capacity' => $capacity
+                ];
+            }
+
+            $overrides[$target_date] = ['status' => 'custom', 'slots' => $clean_date_slots];
+        }
+
+        update_post_meta($post_id, '_sb_date_overrides', $overrides);
     }
 
     private static function time_to_minutes(string $time): int
