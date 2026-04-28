@@ -12,19 +12,13 @@ export function Step2Scheduling() {
     selectedDate,
     selectedStartTime,
     selectedEndTime,
+    getPrimarySpaceId,
     setDate,
     setStartTime,
     setEndTime,
     nextStep,
     prevStep,
   } = useBookingStore();
-
-  const primaryId =
-    lockedResourceIds[0] ||
-    selectedItems.find((i) => i.type === "space")?.id ||
-    selectedItems[0]?.id ||
-    0;
-
 
   const [slots, setSlots] = useState<TimeSlot[]>([]);
   const [apiResponse, setApiResponse] = useState<AvailabilityResponse | null>(
@@ -80,7 +74,7 @@ export function Step2Scheduling() {
       setPriceLoading(true);
       try {
         const pricing = await fetchPricing({
-          space_id: primaryId,
+          space_id: getPrimarySpaceId() ?? 0,
           date: selectedDate!,
           start_time: slot.start,
           end_time: slot.end,
@@ -108,18 +102,19 @@ export function Step2Scheduling() {
   const today = new Date().toISOString().split("T")[0];
 
   useEffect(() => {
-    if (!selectedDate || !primaryId) return;
+    const spaceId = getPrimarySpaceId();
+    if (!selectedDate || spaceId === null) return;
     setLoading(true);
     setError("");
     setApiResponse(null);
-    fetchAvailability(primaryId, selectedDate)
+    fetchAvailability(spaceId, selectedDate)
       .then((res) => {
         setSlots(res.slots);
         setApiResponse(res);
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [selectedDate, primaryId]);
+  }, [selectedDate, getPrimarySpaceId()]);
 
   // Sequential available end slots starting from minDuration (excluding default)
   const endTimeOptions: TimeSlot[] = [];

@@ -190,37 +190,29 @@ final class AvailabilityService
 		if (!is_array($space_ids))
 			$space_ids = [$space_ids];
 
-		$conflict_ids = $this->get_conflict_groups($space_ids);
-
-		// Primary space for meta
 		$primary_id = $space_ids[array_key_first($space_ids)] ?? $space_ids[0] ?? 0;
 
-		// FIXED-PRIORITY: Check if fixed slots defined on primary (before conflicts)
-		if ($this->has_fixed_slots_defined($primary_id)) {
-			return $this->get_fixed_slots($conflict_ids, $date);
-		}
+		error_log('AVAIL DEBUG: get_slots called for space_ids=' . print_r($space_ids, true) . ", primary_id=$primary_id, date=$date");
 
-		// Fallback to dynamic slots
-		[$open, $close] = $this->resolve_effective_hours($primary_id, $date);
+		// 1. FIRST: Attempt fixed slots (now using conflict_ids inside get_fixed_slots)
+		$fixed = $this->get_fixed_slots($space_ids, $date);
+		error_log('AVAIL DEBUG: Fixed slots count: ' . count($fixed));
 
-		if (!$open || !$close) {
-			return [];  // Primary space closed
-		}
-
-		$slots = $this->generate_slots($open, $close, $step_mins);
-		$booked_intervals = $this->repo->get_confirmed_intervals_for_spaces($conflict_ids, $date);
-		[$pre_buf, $post_buf] = $this->resolve_buffers($primary_id);
-		$inflated_intervals = array_map(function ($b) use ($pre_buf, $post_buf) {
+		if (count($fixed) > 0) {
+			error_log('AVAIL DEBUG: Using FIXED slots');
 			return [
-				'start' => $this->add_minutes($b['start'], -$pre_buf),
-				'end' => $this->add_minutes($b['end'], $post_buf),
+				'slots' => $fixed,
+				'has_fixed_slots' => true
 			];
-		}, $booked_intervals);
+		}
 
-		return array_map(static function (array $slot) use ($inflated_intervals): array {
-			$slot['available'] = !self::overlaps($slot['start'], $slot['end'], $inflated_intervals);
-			return $slot;
-		}, $slots);
+		// 2. FALLBACK: No fixed slots found → dynamic generation
+		error_log("AVAIL DEBUG: No fixed slots found for ID $primary_id, falling back to dynamic generation.");
+		$dynamic = $this->generate_dynamic_slots($space_ids, $date, $step_mins);
+		return [
+			'slots' => $dynamic,
+			'has_fixed_slots' => false
+		];
 	}
 
 	/**
@@ -242,22 +234,81 @@ final class AvailabilityService
 		return [$pre, $post];
 	}
 
+	/**
+	 * Generate dynamic slots using global/space hours as fallback when fixed slots empty
+	 */
+	public function generate_dynamic_slots(int|array $space_ids, string $date, int $step_mins = 60): array
+	{
+		if (!is_array($space_ids))
+			$space_ids = [$space_ids];
+
+		$conflict_ids = $this->get_conflict_groups($space_ids);
+
+		// Primary space for meta
+		$primary_id = $space_ids[array_key_first($space_ids)] ?? $space_ids[0] ?? 0;
+
+		error_log('AVAIL DEBUG: generate_dynamic_slots for primary_id=' . $primary_id);
+
+		[$open, $close] = $this->resolve_effective_hours($primary_id, $date);
+		error_log("AVAIL DEBUG: dynamic effective open=$open, close=$close");
+
+		if (!$open || !$close) {
+			error_log('AVAIL DEBUG: Space closed for dynamic, empty slots');
+			return [];  // Primary space closed
+		}
+
+		$slots = $this->generate_slots($open, $close, $step_mins);
+		error_log('AVAIL DEBUG: Generated raw dynamic slots count: ' . count($slots));
+
+		$booked_intervals = $this->repo->get_confirmed_intervals_for_spaces($conflict_ids, $date);
+		error_log('AVAIL DEBUG: Booked intervals count: ' . count($booked_intervals));
+
+		[$pre_buf, $post_buf] = $this->resolve_buffers($primary_id);
+		error_log("AVAIL DEBUG: Dynamic buffers pre=$pre_buf post=$post_buf");
+
+		$inflated_intervals = array_map(function ($b) use ($pre_buf, $post_buf) {
+			return [
+				'start' => $this->add_minutes($b['start'], -$pre_buf),
+				'end' => $this->add_minutes($b['end'], $post_buf),
+			];
+		}, $booked_intervals);
+
+		$available_count = 0;
+		$final_slots = array_map(static function (array $slot) use ($inflated_intervals, &$available_count): array {
+			$is_available = !self::overlaps($slot['start'], $slot['end'], $inflated_intervals);
+			if ($is_available)
+				$available_count++;
+			$slot['available'] = $is_available;
+			return $slot;
+		}, $slots);
+
+		error_log("AVAIL DEBUG: Final dynamic available slots: $available_count / " . count($slots));
+
+		return $final_slots;
+	}
+
 	public function resolve_effective_hours(int $space_id, string $date): array
 	{
 		[$raw_open, $raw_close] = $this->resolve_hours($space_id, $date);
+		error_log("AVAIL DEBUG: raw hours open=$raw_open close=$raw_close for space $space_id date $date");
+
 		[$pre_buf, $post_buf] = $this->resolve_buffers($space_id);
+		error_log("AVAIL DEBUG: buffers pre=$pre_buf post=$post_buf");
 
 		if (!$raw_open || !$raw_close) {
+			error_log('AVAIL DEBUG: Raw hours null, returning null');
 			return [null, null];
 		}
 
 		$effective_open = $this->add_minutes($raw_open, $pre_buf);
 		$effective_close = $this->add_minutes($raw_close, -$post_buf);
+		error_log("AVAIL DEBUG: effective open=$effective_open close=$effective_close");
 
 		// Allow if buffers eat entire day (still generate slots in raw window)
 		$raw_open_min = $this->time_to_minutes($raw_open);
 		$raw_close_min = $this->time_to_minutes($raw_close);
 		if ($raw_open_min >= $raw_close_min) {
+			error_log('AVAIL DEBUG: Raw duration invalid, returning null');
 			return [null, null];
 		}
 		return [$effective_open, $effective_close];
@@ -266,20 +317,28 @@ final class AvailabilityService
 	public function resolve_hours(int $space_id, string $date): array
 	{
 		$day_of_week = (int) (new DateTime($date))->format('w');  // 0=Sun … 6=Sat
+		error_log("AVAIL DEBUG: resolve_hours space_id=$space_id date=$date day=$day_of_week");
 
 		// Check per-space day overrides stored in post meta
 		$overrides = get_post_meta($space_id, '_sb_day_overrides', true);
+		error_log('AVAIL DEBUG: day_overrides=' . print_r($overrides, true));
 		if (is_array($overrides) && isset($overrides[$day_of_week])) {
 			$override = $overrides[$day_of_week];
+			error_log('AVAIL DEBUG: found override=' . print_r($override, true));
 			if (isset($override['closed']) && $override['closed']) {
+				error_log('AVAIL DEBUG: Override closed=true');
 				return [null, null];
 			}
-			return [$override['open'] ?? null, $override['close'] ?? null];
+			$open = $override['open'] ?? null;
+			$close = $override['close'] ?? null;
+			error_log("AVAIL DEBUG: Override hours open=$open close=$close");
+			return [$open, $close];
 		}
 
 		// Fallback to global defaults
 		$global_open = get_option('sb_global_open_time', '09:00');
 		$global_close = get_option('sb_global_close_time', '22:00');
+		error_log("AVAIL DEBUG: Global fallback open=$global_open close=$global_close");
 
 		return [$global_open, $global_close];
 	}

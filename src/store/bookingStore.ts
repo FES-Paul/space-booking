@@ -64,6 +64,7 @@ interface BookingState {
   checkCartBooking: () => Promise<void>;
   loadBookingStatus: (id: number) => Promise<void>;
   setBookingStatus: (status: "pending" | "in_review" | "error") => void;
+  getPrimarySpaceId: () => number | null;
   setHasCartBooking: (has: boolean) => void;
   reset: () => void;
   setBookingPolicy: (policy: string) => void;
@@ -265,14 +266,20 @@ export const useBookingStore = create<BookingState>()((set, get) => ({
   clearItems: () => set({ selectedItems: [], lockedResourceIds: [] }),
   getPrimarySpaceId: () => {
     const state = get();
-    // FIXED-PRIORITY: First locked physical space ID, then first selected item ID
-    if (state.lockedResourceIds.length > 0) {
-      return state.lockedResourceIds[0];
+    if (state.selectedItems.length === 0) return null;
+    const item = state.selectedItems[0];
+    if (item.type === "space") {
+      return Number(item.id);
     }
-    if (state.selectedItems.length > 0) {
-      return state.selectedItems[0].id;
+    if (item.type === "package") {
+      const pkg = item as Package;
+      if ("space_id" in pkg && pkg.space_id) {
+        const resolvedId = Number(pkg.space_id);
+        console.log("Package resolved to Space:", resolvedId);
+        return resolvedId;
+      }
     }
-    return 0;
+    return Number(item.id); // Fallback
   },
   getLockedResourceIds: () => {
     const state = get();

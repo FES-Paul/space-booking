@@ -93,11 +93,11 @@ final class AvailabilityController extends WP_REST_Controller
 			return new WP_REST_Response(['message' => 'Space not found.'], 404);
 		}
 
-		$slots = $this->availability->get_slots($space_id, $date);
-		[$open, $close] = $this->availability->resolve_effective_hours($space_id, $date);
+		$result = $this->availability->get_slots($space_id, $date, $step_mins);
+		$slots = $result['slots'];
+		$has_fixed_slots = $result['has_fixed_slots'];
 
-		// FIXED-PRIORITY: Detect if fixed mode defined (even empty)
-		$has_fixed_slots = $this->availability->has_fixed_slots_defined($space_id);
+		[$open, $close] = $this->availability->resolve_effective_hours($space_id, $date);
 
 		// For fixed slots display, compute effective open/close from slots
 		if ($has_fixed_slots && !empty($slots)) {
