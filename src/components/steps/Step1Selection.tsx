@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useBookingStore } from "@/store/bookingStore";
 import { fetchSpaces, fetchPackages } from "@/utils/api";
-import type { Space, Package } from "@/types";
+import type { Space, Package, SelectionItem } from "@/types";
 
 export function Step1Selection() {
   const formatTimeTo12Hour = (timeStr: string): string => {
@@ -15,39 +15,209 @@ export function Step1Selection() {
   };
 
   const {
-    selectedSpace,
-    selectedPackage,
-    setSpace,
-    setPackage,
+    selectedItems,
+    lockedResourceIds,
+    addItem,
+    removeItem,
+    loadResourceMap,
     nextStep,
     hasCartBooking,
     checkCartBooking,
   } = useBookingStore();
+
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [packages, setPackages] = useState<Package[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"space" | "package">("space");
 
+  // Load data and resource map
   useEffect(() => {
     setLoading(true);
-    Promise.all([fetchSpaces(), fetchPackages()])
+    Promise.all([fetchSpaces(), fetchPackages(), loadResourceMap()])
       .then(([s, p]) => {
         setSpaces(s);
         setPackages(p);
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [loadResourceMap]);
 
   useEffect(() => {
     checkCartBooking();
   }, [checkCartBooking]);
 
-  const canProceed =
-    selectedSpace !== null || (selectedPackage !== null && !hasCartBooking);
+  // Unified toggle handler
+  const handleSelect = useCallback(
+    (item: Space | Package, type: "space" | "package") => {
+      const itemId = item.id;
+      const isSelected = selectedItems.some((i) => i.id === itemId);
+
+      let typedItem: SelectionItem;
+      if ("space_ids" in item) {
+        typedItem = {
+          ...item,
+          type: "package" as const,
+          physicalSpaceIds: item.physicalSpaceIds || [],
+        } as SelectionItem;
+      } else {
+        typedItem = {
+          ...item,
+          type: "space" as const,
+          physicalSpaceIds: item.physicalSpaceIds || [item.id],
+        } as SelectionItem;
+      }
+
+      if (isSelected) {
+        // Unselect: remove by ID (functional update in store)
+        removeItem(itemId);
+      } else {
+        // Select: add item
+        addItem(typedItem);
+      }
+    },
+    [selectedItems, addItem, removeItem],
+  );
+
+  // Check if item is locked (overlaps with locked resources)
+  const isLocked = useCallback(
+    (item: Space | Package) => {
+      const itemFootprint = item.physicalSpaceIds || [item.id];
+      return itemFootprint.some((id) => lockedResourceIds.includes(id));
+    },
+    [lockedResourceIds],
+  );
+
+  // Check if item is selected
+  const isSelected = useCallback(
+    (itemId: number) => {
+      return selectedItems.some((i) => i.id === itemId);
+    },
+    [selectedItems],
+  );
+
+  const canProceed = selectedItems.length > 0 && !hasCartBooking;
+
+  const renderCard = (item: Space | Package, type: "space" | "package") => {
+    const itemId = item.id;
+    const selected = isSelected(itemId);
+    const locked = isLocked(item);
+    const space = item as Space;
+    const overrides = space.price_overrides ?? [];
+
+    return (
+      <div
+        key={itemId}
+        className={`sb-card 
+          ${selected ? "sb-card--selected" : ""} 
+          ${locked ? "sb-card--locked opacity-50 cursor-not-allowed" : "cursor-pointer"}
+        `}
+        onClick={!locked ? () => handleSelect(item, type) : undefined}
+        role="button"
+        tabIndex={locked ? -1 : 0}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !locked) handleSelect(item, type);
+        }}
+      >
+        <img
+          src={
+            item.thumbnail ??
+            "https://upload.wikimedia.org/wikipedia/commons/1/14/No_Image_Available.jpg"
+          }
+          alt={item.title}
+          className="sb-card__img"
+        />
+        <div className="sb-card__body">
+          <h3 className="sb-card__title">{item.title}</h3>
+          {type === "space" ? (
+            <>
+              <p className="sb-card__excerpt">{(item as Space).excerpt}</p>
+              <div className="sb-card__price">
+                <div>
+                  Regular: {window.sbConfig.symbol}
+                  {(item as Space).hourly_rate.toFixed(2)} / hr
+                </div>
+                <div>Min: {(item as Space).min_duration}h booking</div>
+                {(item as Space).capacity > 0 && (
+                  <div>Up to {(item as Space).capacity} guests</div>
+                )}
+                {overrides.length > 0 && (
+                  <div className="sb-price-overrides">
+                    {overrides.map((ov: any, idx: number) => {
+                      const todayDay = new Date().getDay();
+                      const appliesToday = ov.days.includes(todayDay);
+                      const dayNames = [
+                        "Sun",
+                        "Mon",
+                        "Tue",
+                        "Wed",
+                        "Thu",
+                        "Fri",
+                        "Sat",
+                      ];
+                      const dayLabel = ov.days
+                        .map((d: number) => dayNames[d])
+                        .join(", ");
+                      return (
+                        <div key={idx} className="sb-override">
+                          <span>
+                            {dayLabel} {formatTimeTo12Hour(ov.start_time)}-
+                            {formatTimeTo12Hour(ov.end_time)}:
+                          </span>
+                          <span>
+                            {window.sbConfig.symbol}
+                            {ov.hourly_rate.toFixed(2)}/hr
+                          </span>
+                          {appliesToday && (
+                            <span className="sb-active-override">✓</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="sb-card__excerpt">
+                {(item as Package).description}
+              </p>
+              <p className="sb-card__price">
+                {window.sbConfig.symbol}
+                {(item as Package).price.toFixed(2)} flat
+                {(item as Package).space_name &&
+                  ` · ${(item as Package).space_name}`}
+                {(item as Package).duration > 0 &&
+                  ` · ${(item as Package).duration}h`}
+              </p>
+            </>
+          )}
+        </div>
+        {selected && (
+          <span className="sb-card__check" aria-label="Selected">
+            ✓
+          </span>
+        )}
+        {locked && (
+          <span
+            className="sb-card__lock"
+            aria-label="Locked by package selection"
+          >
+            🔒
+          </span>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="sb-step sb-step-1">
-      <h2 className="sb-step__title">Choose a Space or Package</h2>
+      <h2 className="sb-step__title">
+        Choose Spaces or Packages (Multi-Select)
+      </h2>
+      <p className="sb-step__subtitle">
+        Selected: {selectedItems.length} items | Locked resources:{" "}
+        {lockedResourceIds.length}
+      </p>
 
       {/* Tabs */}
       <div className="sb-tabs">
@@ -55,97 +225,26 @@ export function Step1Selection() {
           className={`sb-tab ${tab === "space" ? "sb-tab--active" : ""}`}
           onClick={() => setTab("space")}
         >
-          Spaces
+          Spaces ({spaces.length})
         </button>
         <button
           className={`sb-tab ${tab === "package" ? "sb-tab--active" : ""}`}
           onClick={() => setTab("package")}
         >
-          Packages
+          Packages ({packages.length})
         </button>
       </div>
 
-      {loading && <div className="sb-loading">Loading…</div>}
+      {loading && (
+        <div className="sb-loading">Loading options and resource map…</div>
+      )}
 
       {/* Spaces */}
       {!loading && tab === "space" && (
         <div className="sb-cards">
-          {spaces.map((space) => (
-            <div
-              key={space.id}
-              className={`sb-card ${selectedSpace?.id === space.id ? "sb-card--selected" : ""}`}
-              onClick={() => setSpace(space)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => e.key === "Enter" && setSpace(space)}
-            >
-              <img
-                src={
-                  space.thumbnail ??
-                  "https://upload.wikimedia.org/wikipedia/commons/1/14/No_Image_Available.jpg"
-                }
-                alt={space.title}
-                className="sb-card__img"
-              />
-              <div className="sb-card__body">
-                <h3 className="sb-card__title">{space.title}</h3>
-                <p className="sb-card__excerpt">{space.excerpt}</p>
-                <div className="sb-card__price">
-                  <div>
-                    Regular: {window.sbConfig.symbol}
-                    {space.hourly_rate.toFixed(2)} / hr
-                  </div>
-                  <div>Min: {space.min_duration}h booking</div>
-                  {space.capacity > 0 && (
-                    <div>Up to {space.capacity} guests</div>
-                  )}
-                  {space.price_overrides &&
-                    space.price_overrides.length > 0 && (
-                      <div className="sb-price-overrides">
-                        {space.price_overrides.map((ov, idx) => {
-                          const todayDay = new Date().getDay();
-                          const appliesToday = ov.days.includes(todayDay);
-                          const dayNames = [
-                            "Sun",
-                            "Mon",
-                            "Tue",
-                            "Wed",
-                            "Thu",
-                            "Fri",
-                            "Sat",
-                          ];
-                          const dayLabel = ov.days
-                            .map((d) => dayNames[d])
-                            .join(", ");
-                          return (
-                            <div key={idx} className="sb-override">
-                              <span>
-                                {dayLabel} {formatTimeTo12Hour(ov.start_time)}-
-                                {formatTimeTo12Hour(ov.end_time)}:
-                              </span>
-                              <span>
-                                {window.sbConfig.symbol}
-                                {ov.hourly_rate.toFixed(2)}/hr
-                              </span>
-                              {appliesToday && (
-                                <span className="sb-active-override">✓</span>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                </div>
-              </div>
-              {selectedSpace?.id === space.id && (
-                <span className="sb-card__check" aria-label="Selected">
-                  ✓
-                </span>
-              )}
-            </div>
-          ))}
+          {spaces.map((space) => renderCard(space, "space"))}
           {spaces.length === 0 && (
-            <p className="sb-empty">No spaces available at the moment.</p>
+            <p className="sb-empty">No spaces available.</p>
           )}
         </div>
       )}
@@ -153,46 +252,14 @@ export function Step1Selection() {
       {/* Packages */}
       {!loading && tab === "package" && (
         <div className="sb-cards">
-          {packages.map((pkg) => (
-            <div
-              key={pkg.id}
-              className={`sb-card ${selectedPackage?.id === pkg.id ? "sb-card--selected" : ""}`}
-              onClick={() => setPackage(pkg)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => e.key === "Enter" && setPackage(pkg)}
-            >
-              <img
-                src={
-                  pkg.thumbnail ??
-                  "https://upload.wikimedia.org/wikipedia/commons/1/14/No_Image_Available.jpg"
-                }
-                alt={pkg.title}
-                className="sb-card__img"
-              />
-              <div className="sb-card__body">
-                <h3 className="sb-card__title">{pkg.title}</h3>
-                <p className="sb-card__excerpt">{pkg.description}</p>
-                <p className="sb-card__price">
-                  {window.sbConfig.symbol}
-                  {pkg.price.toFixed(2)} flat
-                  {pkg.space_name && ` · ${pkg.space_name}`}
-                  {pkg.duration > 0 && ` · ${pkg.duration}h`}
-                </p>
-              </div>
-              {selectedPackage?.id === pkg.id && (
-                <span className="sb-card__check" aria-label="Selected">
-                  ✓
-                </span>
-              )}
-            </div>
-          ))}
+          {packages.map((pkg) => renderCard(pkg, "package"))}
           {packages.length === 0 && (
-            <p className="sb-empty">No packages available at the moment.</p>
+            <p className="sb-empty">No packages available.</p>
           )}
         </div>
       )}
 
+      {/* Cart Booking Modal - unchanged */}
       {hasCartBooking && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50"
@@ -219,10 +286,7 @@ export function Step1Selection() {
                 className="w-full sb-btn sb-btn--secondary py-3"
                 onClick={async (e) => {
                   e.stopPropagation();
-                  // Clear cart logic - to be implemented in step 5
                   console.log("Clear cart & start new booking");
-                  // await store.clearCart();
-                  // store.setHasCartBooking(false);
                 }}
               >
                 Delete Previous & Start Again
@@ -231,13 +295,14 @@ export function Step1Selection() {
           </div>
         </div>
       )}
+
       <div className="sb-step__actions">
         <button
           className="sb-btn sb-btn--primary"
           disabled={!canProceed}
           onClick={nextStep}
         >
-          Continue →
+          Continue → ({selectedItems.length} selected)
         </button>
       </div>
     </div>

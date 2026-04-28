@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import { useBookingStore } from "@/store/bookingStore";
+import type { SelectionItem } from "@/types";
 import { fetchSpace, fetchPackages, checkCartHasBooking } from "@/utils/api";
 import { StepProgress } from "./shared/StepProgress";
 import { Step1Selection } from "./steps/Step1Selection";
@@ -17,14 +18,8 @@ interface Props {
 }
 
 export function BookingApp({ preSpaceId, prePackageId }: Props) {
-  const {
-    setSpace,
-    setPackage,
-    setStep,
-    bookingId,
-    loadBookingStatus,
-    loadResourceMap,
-  } = useBookingStore((state) => state);
+  const { setStep, bookingId, loadBookingStatus, loadResourceMap } =
+    useBookingStore((state) => state);
   const currentStep = useBookingStore((s) => s.currentStep);
 
   // Direct booking confirmation from query params or data attrs (Step 1/1)
@@ -80,7 +75,10 @@ export function BookingApp({ preSpaceId, prePackageId }: Props) {
     if (preSpaceId) {
       fetchSpace(preSpaceId)
         .then((space) => {
-          setSpace(space);
+          useBookingStore.getState().addItem({
+            ...space,
+            type: "space" as const,
+          } as SelectionItem);
           setStep(2);
         })
         .catch(() => {
@@ -91,7 +89,10 @@ export function BookingApp({ preSpaceId, prePackageId }: Props) {
         .then((pkgs) => {
           const pkg = pkgs.find((p) => p.id === prePackageId);
           if (pkg) {
-            setPackage(pkg);
+            useBookingStore.getState().addItem({
+              ...pkg,
+              type: "package" as const,
+            } as SelectionItem);
             setStep(2);
           }
         })
