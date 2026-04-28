@@ -9,6 +9,7 @@ use SpaceBooking\Admin\SpaceMetaBox;
 use SpaceBooking\Controllers\AvailabilityController;
 use SpaceBooking\Controllers\BookingController;
 use SpaceBooking\Controllers\CartController;
+use SpaceBooking\Controllers\ConflictsController;
 use SpaceBooking\Controllers\CustomerController;
 use SpaceBooking\Controllers\PricingController;
 use SpaceBooking\Controllers\SpaceController;
@@ -76,6 +77,7 @@ final class Plugin
             (new SpaceController())->register_routes();
             (new AvailabilityController())->register_routes();
             (new BookingController())->register_routes();
+            (new ConflictsController())->register_routes();
             (new CustomerController())->register_routes();
             (new PricingController())->register_routes();
             (new CartController())->register_routes();

@@ -89,6 +89,24 @@ final class BookingController extends WP_REST_Controller
 		$email = sanitize_email($request->get_param('customer_email'));
 		$phone = sanitize_text_field($request->get_param('customer_phone') ?? '');
 		$notes = sanitize_textarea_field($request->get_param('notes') ?? '');
+		$selected_item_ids = array_map('intval', (array) $request->get_param('selected_item_ids'));
+		if (empty($selected_item_ids)) {
+			return new WP_REST_Response(['message' => 'Missing selected_item_ids.'], 422);
+		}
+		$lead_space_id = $space_id;
+
+		$data = [
+			'space_id' => $space_id,
+			'package_id' => $package_id,
+			'booking_date' => $date,
+			'start_time' => $start_time,
+			'end_time' => $end_time,
+			'customer_name' => $name,
+			'customer_email' => $email,
+			'customer_phone' => $phone,
+			'notes' => $notes,
+			'extras' => $extras,
+		];
 
 		// ── Guard: space exists ───────────────────────────────────────────────
 		$post = get_post($space_id);
@@ -122,25 +140,21 @@ final class BookingController extends WP_REST_Controller
 
 		// ── Persist pending booking ───────────────────────────────────────────
 		try {
-			$booking_id = $this->repo->create([
-				'space_id' => $space_id,
-				'package_id' => $package_id,
-				'customer_name' => $name,
-				'customer_email' => $email,
-				'customer_phone' => $phone,
-				'booking_date' => $date,
-				'start_time' => $start_time,
-				'end_time' => $end_time,
-				'duration_hours' => $price['duration_hours'],
-				'base_price' => $price['base_price'],
-				'extras_price' => $price['extras_price'],
-				'modifier_price' => $price['modifier_price'],
-				'total_price' => $price['total_price'],
-				'notes' => $notes,
-				'extras' => $extras,
-			]);
+			$booking_id = $this->repo->create($data);
 		} catch (\RuntimeException $e) {
 			return new WP_REST_Response(['message' => 'Could not save booking.'], 500);
+		}
+
+		// ── Bidirectional shadows for full selection footprint ──────────────────
+		$avail = new \SpaceBooking\Services\AvailabilityService();
+		$footprint = $avail->get_conflict_groups($selected_item_ids);
+		$shadow_targets = array_values(array_diff($footprint, [$lead_space_id]));
+		foreach ($shadow_targets as $sid) {
+			try {
+				$this->repo->create_shadow($booking_id, $sid, $date, $start_time, $end_time);
+			} catch (\RuntimeException $e) {
+				error_log('Failed to create shadow for booking #' . $booking_id . ' space ' . $sid . ': ' . $e->getMessage());
+			}
 		}
 
 		// ── Add to WooCommerce cart or session ────────────────────────────────
@@ -229,6 +243,13 @@ final class BookingController extends WP_REST_Controller
 			'customer_phone' => ['required' => false, 'sanitize_callback' => 'sanitize_text_field'],
 			'notes' => ['required' => false, 'sanitize_callback' => 'sanitize_textarea_field'],
 			'extras' => ['required' => false, 'default' => []],
+			'selected_item_ids' => [
+				'required' => true,
+				'type' => 'array',
+				'sanitize_callback' => function ($input) {
+					return array_map('absint', (array) $input);
+				}
+			],
 		];
 	}
 }

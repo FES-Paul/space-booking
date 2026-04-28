@@ -7,17 +7,20 @@ import type {
   Extra,
   Package,
   PriceBreakdownItem,
+  ResourceFootprint,
   SelectedExtra,
   Space,
+  SelectionItem,
 } from "../types";
 
-import { checkCartHasBooking } from "../utils/api";
+import { checkCartHasBooking, fetchResourceMap } from "../utils/api";
 
 interface BookingState {
   bookingPolicy: string;
   currentStep: BookingStep;
-  selectedSpace: Space | null;
-  selectedPackage: Package | null;
+  selectedItems: SelectionItem[];
+  lockedResourceIds: number[]; // Cached union footprint for UI
+  resourceMap: Record<number, ResourceFootprint> | null;
   selectedDate: string;
   selectedStartTime: string;
   selectedEndTime: string;
@@ -35,8 +38,11 @@ interface BookingState {
   setStep: (step: BookingStep) => void;
   nextStep: () => void;
   prevStep: () => void;
-  setSpace: (space: Space | null) => void;
-  setPackage: (pkg: Package | null) => void;
+  addItem: (item: SelectionItem) => void;
+  removeItem: (id: number) => void;
+  clearItems: () => void;
+  getLockedResourceIds: () => number[];
+  loadResourceMap: () => Promise<void>;
   setDate: (date: string) => void;
   setStartTime: (time: string) => void;
   setEndTime: (time: string) => void;
@@ -57,7 +63,6 @@ interface BookingState {
   checkCartBooking: () => Promise<void>;
   loadBookingStatus: (id: number) => Promise<void>;
   setBookingStatus: (status: "pending" | "in_review" | "error") => void;
-
   setHasCartBooking: (has: boolean) => void;
   reset: () => void;
   setBookingPolicy: (policy: string) => void;
@@ -69,8 +74,9 @@ export const useBookingStore = create<BookingState>()((set, get) => ({
   // ── Initial state ────────────────────────────────────────────────────────
   currentStep: 1,
   bookingPolicy: "",
-  selectedSpace: null,
-  selectedPackage: null,
+  selectedItems: [],
+  lockedResourceIds: [],
+  resourceMap: null,
   selectedDate: "",
   selectedStartTime: "",
   selectedEndTime: "",
@@ -97,11 +103,133 @@ export const useBookingStore = create<BookingState>()((set, get) => ({
       currentStep: Math.max(state.currentStep - 1, 1) as BookingStep,
     })),
 
+  loadResourceMap: async () => {
+    console.log("loadResourceMap called");
+    try {
+      const map = await fetchResourceMap();
+      console.log("resourceMap loaded:", Object.keys(map));
+      set({ resourceMap: map });
+    } catch (e) {
+      console.error("Failed to load resource map:", e);
+    }
+  },
+
   // ── Step 1 ───────────────────────────────────────────────────────────────
-  setSpace: (space: Space | null) =>
-    set({ selectedSpace: space, selectedPackage: null }),
-  setPackage: (pkg: Package | null) =>
-    set({ selectedPackage: pkg, selectedSpace: null }),
+  addItem: (item: SelectionItem) => {
+    console.log("addItem called:", item.id, item.title);
+    const state = get();
+    console.log(
+      "current selectedItems:",
+      state.selectedItems.map((i) => i.id),
+    );
+    console.log("resourceMap loaded?", !!state.resourceMap);
+    console.log("current locked:", state.lockedResourceIds);
+    if (state.selectedItems.some((i) => i.id === item.id)) {
+      console.log("already selected, return");
+      return;
+    }
+    if (!state.resourceMap) {
+      console.log("no resourceMap, alert");
+      alert("Resource map loading...");
+      return;
+    }
+    const map = state.resourceMap;
+    const itemFootprint = map[item.id]?.footprint ?? [item.id];
+    console.log("itemFootprint:", itemFootprint);
+    const currentLocked = state.lockedResourceIds;
+    const hasOverlap = itemFootprint.some((id) => currentLocked.includes(id));
+    console.log("hasOverlap?", hasOverlap);
+    if (hasOverlap) {
+      console.log("overlap, alert");
+      alert("Conflicts with current selection: overlaps physical resources.");
+      return;
+    }
+    const computeLocked = (items: SelectionItem[]): number[] => {
+      const locked = new Set<number>();
+      for (const it of items) {
+        const footprint = map[it.id]?.footprint ?? [it.id];
+        footprint.forEach((id) => locked.add(id));
+      }
+      return Array.from(locked);
+    };
+    const newSelected = [...state.selectedItems, item];
+    const newLocked = computeLocked(newSelected);
+    console.log(
+      "setting new selected:",
+      newSelected.map((i) => i.id),
+      "new locked:",
+      newLocked,
+    );
+    set({ selectedItems: newSelected, lockedResourceIds: newLocked });
+    console.log("addItem done");
+  },
+  removeItem: (id: number) => {
+    console.log("removeItem called:", id);
+    const state = get();
+    console.log(
+      "current selectedItems:",
+      state.selectedItems.map((i) => i.id),
+    );
+    console.log("current locked:", state.lockedResourceIds);
+    if (!state.resourceMap) {
+      console.log("no resourceMap, return");
+      return;
+    }
+    const map = state.resourceMap;
+    const computeLocked = (items: SelectionItem[]): number[] => {
+      const locked = new Set<number>();
+      for (const it of items) {
+        const footprint = map[it.id]?.footprint ?? [it.id];
+        footprint.forEach((id) => locked.add(id));
+      }
+      return Array.from(locked);
+    };
+    const newSelected = state.selectedItems.filter((i) => i.id !== id);
+    const newLocked = computeLocked(newSelected);
+    console.log(
+      "setting new selected:",
+      newSelected.map((i) => i.id),
+      "new locked:",
+      newLocked,
+    );
+    set({ selectedItems: newSelected, lockedResourceIds: newLocked });
+    console.log("removeItem done");
+  },
+  clearItems: () => set({ selectedItems: [], lockedResourceIds: [] }),
+  getLockedResourceIds: () => {
+    const state = get();
+    if (!state.resourceMap) return [];
+    const map = state.resourceMap;
+    const computeLocked = (items: SelectionItem[]): number[] => {
+      const locked = new Set<number>();
+      for (const it of items) {
+        const footprint = map[it.id]?.footprint ?? [it.id];
+        footprint.forEach((id) => locked.add(id));
+      }
+      return Array.from(locked);
+    };
+    return computeLocked(state.selectedItems);
+  },
+  setSpace: (space: Space | null) => {
+    if (space) {
+      get().addItem({
+        ...space,
+        type: "space" as const,
+      });
+    } else {
+      get().clearItems();
+    }
+  },
+  setPackage: (pkg: Package | null) => {
+    if (pkg) {
+      get().addItem({
+        ...pkg,
+        type: "package" as const,
+      });
+    } else {
+      get().clearItems();
+    }
+  },
 
   // ── Step 2 ───────────────────────────────────────────────────────────────
   setDate: (date: string) =>
@@ -234,8 +362,9 @@ export const useBookingStore = create<BookingState>()((set, get) => ({
     const state = get();
     const breakdown = rawBreakdown.map((item: PriceBreakdownItem) => {
       let label = item.label;
-      if (label === "Package price" && state.selectedPackage) {
-        label = `${state.selectedPackage.title}`;
+      const pkgItem = state.selectedItems.find((i) => i.type === "package");
+      if (label === "Package price" && pkgItem) {
+        label = `${pkgItem.title}`;
       } else if (label === "Extras" && state.selectedExtras.length > 0) {
         const extraNames = state.selectedExtras
           .map((e: SelectedExtra) => {
@@ -247,10 +376,13 @@ export const useBookingStore = create<BookingState>()((set, get) => ({
           .join(" + ");
         label = `Extras: ${extraNames}`;
       } else if (
-        state.selectedSpace &&
+        state.selectedItems.some((i) => i.type === "space") &&
         (label.includes("–") || label.match(/^\\d{2}:\\d{2}–\\d{2}:\\d{2}/))
       ) {
-        label = `${state.selectedSpace.title}: ${label}`;
+        const primarySpace = state.selectedItems.find(
+          (i) => i.type === "space",
+        ) as Space;
+        label = `${primarySpace.title}: ${label}`;
       }
       return { ...item, label };
     });
@@ -319,8 +451,9 @@ export const useBookingStore = create<BookingState>()((set, get) => ({
     set({
       currentStep: 1,
       bookingPolicy: "",
-      selectedSpace: null,
-      selectedPackage: null,
+      selectedItems: [],
+      lockedResourceIds: [],
+      resourceMap: null,
       selectedDate: "",
       selectedStartTime: "",
       selectedEndTime: "",

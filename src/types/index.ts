@@ -1,5 +1,19 @@
 // ── Domain types ──────────────────────────────────────────────────────────────
 
+export interface ResourceFootprint {
+  id: number;
+  type: "space" | "package";
+  footprint: number[];
+}
+
+export type SelectionItem =
+  | (Space & { type: "space"; physicalSpaceIds?: number[] })
+  | (Package & {
+      type: "package";
+      space_ids?: number[];
+      physicalSpaceIds?: number[];
+    });
+
 export interface Space {
   id: number;
   title: string;
@@ -18,6 +32,7 @@ export interface Space {
     hourly_rate: number;
   }> | null;
   gallery: string[];
+  physicalSpaceIds?: number[]; // Cached footprint self + deps
 }
 
 export interface DayOverride {
@@ -36,6 +51,8 @@ export interface Package {
   space_id: number;
   space_name: string | null;
   extra_ids: number[];
+  space_ids?: number[]; // Multi-spaces for packages
+  physicalSpaceIds?: number[]; // Cached footprint
 }
 
 export interface Extra {
@@ -93,6 +110,23 @@ export interface BookingCreateResponse {
   checkout_url: string;
   total_price: number;
   breakdown: PriceBreakdownItem[];
+  cart_added_directly?: boolean;
+}
+
+declare module "@/utils/api" {
+  interface BookingPayload {
+    space_id: number;
+    package_id?: number;
+    selected_item_ids: number[];
+    date: string;
+    start_time: string;
+    end_time: string;
+    customer_name: string;
+    customer_email: string;
+    customer_phone?: string;
+    notes?: string;
+    extras?: SelectedExtra[];
+  }
 }
 
 export interface CustomerBooking {

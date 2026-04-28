@@ -66,6 +66,13 @@ final class SpaceMetaBox
     width: 100%;
 }
 
+.sb-deps-select {
+    width: 100%;
+    height: 120px;
+    min-height: 120px;
+}
+
+
 
 .sb-day-row {
     display: grid;
@@ -147,9 +154,37 @@ final class SpaceMetaBox
             value="<?php echo esc_attr(get_post_meta($post->ID, '_sb_buffer_post_minutes', true) ?: ''); ?>">
         <p class="description"><?php esc_html_e('Overrides global. 0 = use global.', 'space-booking'); ?></p>
     </div>
+
+    <!-- NEW: Resource Dependencies -->
+    <div class="sb-meta-field">
+        <label
+            for="sb_resource_dependencies"><?php esc_html_e('Required Resources (Dependencies)', 'space-booking'); ?></label>
+        <select id="sb_resource_dependencies" name="sb_resource_dependencies[]" multiple class="sb-deps-select">
+            <?php
+            $spaces = get_posts([
+                'post_type' => 'sb_space',
+                'posts_per_page' => -1,
+                'post_status' => 'publish',
+                'exclude' => [$post->ID],
+                'orderby' => 'title',
+                'order' => 'ASC'
+            ]);
+            $current_deps = get_post_meta($post->ID, '_sb_resource_dependencies', true) ?: [];
+            foreach ($spaces as $space):
+                ?>
+            <option value="<?php echo esc_attr($space->ID); ?>" <?php selected(in_array($space->ID, $current_deps)); ?>>
+                <?php echo esc_html($space->post_title); ?> (ID: <?php echo $space->ID; ?>)
+            </option>
+            <?php endforeach; ?>
+        </select>
+        <p class="description">
+            <?php esc_html_e('Hold Ctrl/Cmd to select multiple. These are child resources this space requires (e.g. Package → Rooms). No self/circular deps allowed.', 'space-booking'); ?>
+        </p>
+    </div>
 </div>
 
 <h4><?php esc_html_e('Day-specific Hour Overrides', 'space-booking'); ?></h4>
+
 <p class="description">
     <?php esc_html_e('Leave blank to use global hours. Check "Closed" to mark as unavailable.', 'space-booking'); ?></p>
 
@@ -439,6 +474,73 @@ jQuery(document).ready(function($) {
 <?php
     }
 
+    public function validate_dependencies(int $post_id, array $raw_deps): array
+    {
+        $errors = [];
+
+        // Self check
+        $deps = array_map('intval', $raw_deps);
+        $deps = array_filter($deps);
+        if (in_array($post_id, $deps)) {
+            $errors[] = __('Space cannot depend on itself.', 'space-booking');
+            return $errors;
+        }
+
+        // Cycle check DFS
+        $space_map = [];
+        $all_spaces = get_posts([
+            'post_type' => 'sb_space',
+            'posts_per_page' => -1,
+            'post_status' => ['publish', 'draft'],
+        ]);
+        foreach ($all_spaces as $s)
+            $space_map[$s->ID] = $s;
+
+        $visited = [];
+        $rec_stack = [];
+        foreach ($deps as $child_id) {
+            if (isset($space_map[$child_id]) && $this->dfs_cycle($post_id, $child_id, $space_map, $visited, $rec_stack)) {
+                $errors[] = sprintf(__('Circular dependency via Space #%d.', 'space-booking'), $child_id);
+                break;
+            }
+        }
+
+        return $errors;
+    }
+
+    private function dfs_cycle(int $source_id, int $target_id, array $space_map, array &$visited, array &$rec_stack): bool
+    {
+        if (!isset($space_map[$target_id]))
+            return false;
+
+        $deps = get_post_meta($target_id, '_sb_resource_dependencies', true) ?: [];
+        $deps = array_map('intval', (array) $deps);
+
+        if (!isset($visited[$target_id])) {
+            $visited[$target_id] = 1;  // visiting
+            $rec_stack[$target_id] = true;
+
+            foreach ($deps as $next_id) {
+                if ($next_id == $source_id)
+                    return true;  // direct back edge
+                if (isset($space_map[$next_id])) {
+                    if (!isset($visited[$next_id])) {
+                        if ($this->dfs_cycle($target_id, $next_id, $space_map, $visited, $rec_stack)) {
+                            return true;
+                        }
+                    } elseif ($rec_stack[$next_id]) {
+                        return true;
+                    }
+                }
+            }
+
+            $rec_stack[$target_id] = false;
+            $visited[$target_id] = 2;  // visited
+        }
+
+        return false;
+    }
+
     public function save(int $post_id, \WP_Post $post): void
     {
         if (
@@ -456,6 +558,19 @@ jQuery(document).ready(function($) {
         update_post_meta($post_id, '_sb_capacity', (int) ($_POST['sb_capacity'] ?? 0));
         update_post_meta($post_id, '_sb_buffer_pre_minutes', (int) ($_POST['sb_buffer_pre'] ?? 0));
         update_post_meta($post_id, '_sb_buffer_post_minutes', (int) ($_POST['sb_buffer_post'] ?? 0));
+
+        // NEW Resource Dependencies validation/save
+        $raw_deps = $_POST['sb_resource_dependencies'] ?? [];
+        $dep_errors = $this->validate_dependencies($post_id, $raw_deps);
+        if (!empty($dep_errors)) {
+            foreach ($dep_errors as $err) {
+                add_settings_error('sb_space', 'deps_invalid', $err, 'error');
+            }
+            return;
+        }
+        $deps = array_unique(array_map('intval', $raw_deps));
+        $deps = array_filter($deps);
+        update_post_meta($post_id, '_sb_resource_dependencies', $deps);
 
         // Day overrides
         $raw_overrides = $_POST['sb_day_overrides'] ?? [];

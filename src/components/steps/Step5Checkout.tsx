@@ -7,22 +7,26 @@ export function Step5Checkout() {
     checkoutUrl,
     priceBreakdown,
     totalPrice,
-    selectedSpace,
-    selectedPackage,
     selectedDate,
     selectedStartTime,
     selectedEndTime,
     customerInfo,
     setCheckoutData,
     prevStep,
+    selectedItems,
   } = useBookingStore();
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const handleCheckout = async () => {
-    const spaceId = selectedSpace?.id ?? selectedPackage?.space_id;
-    const packageId = selectedPackage?.id;
+    const selectedItemIds = useBookingStore
+      .getState()
+      .selectedItems.map((item) => item.id);
+    const spaceId = selectedItemIds[0] || 0; // lead space
+    const packageId = useBookingStore
+      .getState()
+      .selectedItems.find((i) => i.type === "package")?.id;
 
     if (!spaceId) {
       setError("No space selected.");
@@ -36,13 +40,14 @@ export function Step5Checkout() {
       const res = await createBooking({
         space_id: spaceId,
         package_id: packageId,
+        selected_item_ids: selectedItemIds,
         date: selectedDate,
         start_time: selectedStartTime,
         end_time: selectedEndTime,
-        customer_name: customerInfo.name,
-        customer_email: customerInfo.email,
-        customer_phone: customerInfo.phone,
-        notes: customerInfo.notes,
+        customer_name: String(customerInfo.name || ""),
+        customer_email: String(customerInfo.email || ""),
+        customer_phone: String(customerInfo.phone || ""),
+        notes: String(customerInfo.notes || ""),
         extras: useBookingStore.getState().selectedExtras,
       });
 
@@ -64,14 +69,14 @@ export function Step5Checkout() {
 
   return (
     <div className="sb-step sb-step-5">
-      <h2 className="sb-step__title">Review &amp; Checkout</h2>
+      <h2 className="sb-step__title">Review & Checkout</h2>
       <div className="sb-checkout-summary">
         <h3>Booking Summary</h3>
 
         <div className="sb-summary-grid">
           <div className="sb-summary-row">
             <span>Space</span>
-            <span>{selectedSpace?.title ?? selectedPackage?.space_name}</span>
+            <span>{selectedItems[0]?.title ?? "Multiple Items"}</span>
           </div>
           <div className="sb-summary-row">
             <span>Date</span>
@@ -85,11 +90,11 @@ export function Step5Checkout() {
           </div>
           <div className="sb-summary-row">
             <span>Name</span>
-            <span>{customerInfo.name}</span>
+            <span>{String(customerInfo.name || "")}</span>
           </div>
           <div className="sb-summary-row">
             <span>Email</span>
-            <span>{customerInfo.email}</span>
+            <span>{String(customerInfo.email || "")}</span>
           </div>
         </div>
 
@@ -120,7 +125,7 @@ export function Step5Checkout() {
           <button
             className="sb-btn sb-btn--primary"
             onClick={handleCheckout}
-            disabled={loading || checkoutUrl}
+            disabled={loading || !!checkoutUrl}
           >
             {loading
               ? "Creating Booking..."

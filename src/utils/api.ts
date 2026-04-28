@@ -87,6 +87,7 @@ export const fetchPricing = (params: {
 export const createBooking = (payload: {
   space_id: number;
   package_id?: number;
+  selected_item_ids: number[];
   date: string;
   start_time: string;
   end_time: string;
@@ -118,3 +119,15 @@ export const fetchCustomerBookings = (token: string) =>
 
 export const checkCartHasBooking = () =>
   apiFetch<{ hasCartBooking: boolean }>("/cart/has-booking");
+
+import type { ResourceFootprint } from "@/types";
+
+export const fetchConflicts = (itemId: number, type: "space" | "package") =>
+  apiFetch<{ conflict_group_ids: number[] }>("/conflicts", {
+    method: "POST",
+    body: JSON.stringify({ item_id: itemId, type }),
+  }).then((data) => data.conflict_group_ids);
+
+export const fetchResourceMap = (): Promise<
+  Record<number, ResourceFootprint>
+> => apiFetch("/resource-map");

@@ -7,8 +7,6 @@ export function Step6Payment() {
     checkoutUrl,
     priceBreakdown,
     totalPrice,
-    selectedSpace,
-    selectedPackage,
     selectedDate,
     selectedStartTime,
     selectedEndTime,
@@ -18,6 +16,7 @@ export function Step6Payment() {
     prevStep,
     hasCartBooking,
     checkCartBooking,
+    selectedItems,
   } = useBookingStore();
 
   const [loading, setLoading] = useState(false);
@@ -39,8 +38,13 @@ export function Step6Payment() {
     }
 
     // Normal flow: create new booking
-    const spaceId = selectedSpace?.id ?? selectedPackage?.space_id;
-    const packageId = selectedPackage?.id;
+    const selectedItemIds = useBookingStore
+      .getState()
+      .selectedItems.map((item) => item.id);
+    const spaceId = selectedItemIds[0] || 0; // lead space
+    const packageId = useBookingStore
+      .getState()
+      .selectedItems.find((i) => i.type === "package")?.id;
 
     if (!spaceId) {
       setError("No space selected.");
@@ -54,6 +58,7 @@ export function Step6Payment() {
       const res = await createBooking({
         space_id: spaceId,
         package_id: packageId,
+        selected_item_ids: selectedItemIds,
         date: selectedDate,
         start_time: selectedStartTime,
         end_time: selectedEndTime,
@@ -106,7 +111,7 @@ export function Step6Payment() {
         <div className="sb-summary-grid">
           <div className="sb-summary-row">
             <span>Space</span>
-            <span>{selectedSpace?.title ?? selectedPackage?.space_name}</span>
+            <span>{selectedItems[0]?.title ?? "Multiple Items"}</span>
           </div>
           <div className="sb-summary-row">
             <span>Date</span>
@@ -120,11 +125,11 @@ export function Step6Payment() {
           </div>
           <div className="sb-summary-row">
             <span>Name</span>
-            <span>{customerInfo.name}</span>
+            <span>{String(customerInfo.name || "")}</span>
           </div>
           <div className="sb-summary-row">
             <span>Email</span>
-            <span>{customerInfo.email}</span>
+            <span>{String(customerInfo.email || "")}</span>
           </div>
         </div>
 

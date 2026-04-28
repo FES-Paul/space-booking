@@ -13,11 +13,77 @@ use DateTime;
  */
 final class AvailabilityService
 {
-	private BookingRepository $repo;
+	private ?BookingRepository $repo = null;
 
 	public function __construct()
 	{
-		$this->repo = new BookingRepository();
+		// Lazy init repo to avoid class load issues during plugin init
+	}
+
+	/**
+	 * Get all space IDs in the bidirectional conflict group for a space (downstream deps + upstream parents + recursion)
+	 * @return array<int> Unique space IDs
+	 */
+	public function get_conflict_group_ids(int $space_id): array
+	{
+		$group = [$space_id];
+		$visited = [$space_id => true];
+
+		// Bidirectional DFS
+		$this->collect_conflicts($space_id, $group, $visited);
+
+		return array_values($group);
+	}
+
+	private function collect_conflicts(int $id, array &$group, array &$visited): void
+	{
+		global $wpdb;
+
+		// Downstream: my dependencies
+		$my_deps = get_post_meta($id, '_sb_resource_dependencies', true) ?: [];
+		foreach ((array) $my_deps as $child_id) {
+			$child_id = (int) $child_id;
+			if ($child_id && !isset($visited[$child_id])) {
+				$visited[$child_id] = true;
+				$group[] = $child_id;
+				$this->collect_conflicts($child_id, $group, $visited);
+			}
+		}
+
+		// Upstream: spaces that depend on me (reverse edges)
+		$parents = $wpdb->get_col($wpdb->prepare("
+			SELECT pm.post_id 
+			FROM {$wpdb->postmeta} pm
+			JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+			WHERE pm.meta_key = '_sb_resource_dependencies' 
+		\t  AND pm.meta_value LIKE %s
+		\t  AND p.post_type = 'sb_space'
+		\t  AND pm.post_id != %d
+		", '%i:' . $id . ';%', $id));
+		foreach ($parents as $parent_id) {
+			if (!isset($visited[$parent_id])) {
+				$visited[$parent_id] = true;
+				$group[] = $parent_id;
+				$this->collect_conflicts($parent_id, $group, $visited);
+			}
+		}
+	}
+
+	/**
+	 * Get unioned conflict groups for multiple space IDs
+	 */
+	public function get_conflict_groups(array $space_ids): array
+	{
+		$all_conflicts = [];
+		$master_visited = [];
+
+		foreach ($space_ids as $id) {
+			if (!isset($master_visited[$id])) {
+				$this->collect_conflicts($id, $all_conflicts, $master_visited);
+			}
+		}
+
+		return array_unique($all_conflicts);
 	}
 
 	/**
@@ -51,7 +117,10 @@ final class AvailabilityService
 			}
 		}
 
+		if ($this->repo === null)
+			$this->repo = new \SpaceBooking\Services\BookingRepository();
 		$booked_intervals = $this->repo->get_confirmed_intervals($space_id, $date);
+
 		$space_pre_buf = (int) get_post_meta($space_id, '_sb_buffer_pre_minutes', true) ?: (int) get_option('sb_buffer_pre_minutes', 0);
 		$space_post_buf = (int) get_post_meta($space_id, '_sb_buffer_post_minutes', true) ?: (int) get_option('sb_buffer_post_minutes', 0);
 
@@ -80,24 +149,32 @@ final class AvailabilityService
 		return $slots;
 	}
 
-	public function get_slots(int $space_id, string $date, int $step_mins = 60): array
+	public function get_slots(int|array $space_ids, string $date, int $step_mins = 60): array
 	{
-		// Check if fixed slots exist, use them first
-		$fixed_slots = get_post_meta($space_id, '_sb_fixed_slots', true);
+		if (!is_array($space_ids))
+			$space_ids = [$space_ids];
+
+		$conflict_ids = $this->get_conflict_groups($space_ids);
+
+		// Primary space for meta
+		$primary_id = $space_ids[0];
+
+		// Check if fixed slots exist on primary
+		$fixed_slots = get_post_meta($primary_id, '_sb_fixed_slots', true);
 		if (is_array($fixed_slots) && !empty($fixed_slots)) {
-			return $this->get_fixed_slots($space_id, $date);
+			return $this->get_fixed_slots($conflict_ids, $date);
 		}
 
 		// Fallback to dynamic slots
-		[$open, $close] = $this->resolve_effective_hours($space_id, $date);
+		[$open, $close] = $this->resolve_effective_hours($primary_id, $date);
 
 		if (!$open || !$close) {
-			return [];  // Space is closed on this day
+			return [];  // Primary space closed
 		}
 
 		$slots = $this->generate_slots($open, $close, $step_mins);
-		$booked_intervals = $this->repo->get_confirmed_intervals($space_id, $date);
-		[$pre_buf, $post_buf] = $this->resolve_buffers($space_id);
+		$booked_intervals = $this->repo->get_confirmed_intervals($conflict_ids, $date);
+		[$pre_buf, $post_buf] = $this->resolve_buffers($primary_id);
 		$inflated_intervals = array_map(function ($b) use ($pre_buf, $post_buf) {
 			return [
 				'start' => $this->add_minutes($b['start'], -$pre_buf),

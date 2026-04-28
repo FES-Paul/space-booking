@@ -17,8 +17,14 @@ interface Props {
 }
 
 export function BookingApp({ preSpaceId, prePackageId }: Props) {
-  const { setSpace, setPackage, setStep, bookingId, loadBookingStatus } =
-    useBookingStore();
+  const {
+    setSpace,
+    setPackage,
+    setStep,
+    bookingId,
+    loadBookingStatus,
+    loadResourceMap,
+  } = useBookingStore((state) => state);
   const currentStep = useBookingStore((s) => s.currentStep);
 
   // Direct booking confirmation from query params or data attrs (Step 1/1)
@@ -66,6 +72,7 @@ export function BookingApp({ preSpaceId, prePackageId }: Props) {
     };
 
     initCartCheck();
+    loadResourceMap();
   }, []);
 
   // Pre-select space or package from shortcode attributes

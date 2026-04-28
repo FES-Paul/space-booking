@@ -6,8 +6,8 @@ import { fetchPricing } from "@/utils/api";
 
 export function Step2Scheduling() {
   const {
-    selectedSpace,
-    selectedPackage,
+    selectedItems,
+    lockedResourceIds,
     selectedDate,
     selectedStartTime,
     selectedEndTime,
@@ -18,7 +18,7 @@ export function Step2Scheduling() {
     prevStep,
   } = useBookingStore();
 
-  const spaceId = selectedSpace?.id ?? selectedPackage?.space_id;
+  const primaryId = lockedResourceIds[0] || selectedItems[0]?.id || 0;
 
   const [slots, setSlots] = useState<TimeSlot[]>([]);
   const [loading, setLoading] = useState(false);
@@ -42,8 +42,9 @@ export function Step2Scheduling() {
   };
 
   // Legacy dynamic mode (if no fixed slots)
-  const minDuration = selectedSpace?.min_duration ?? 1;
-  const maxDuration = selectedSpace?.max_duration ?? 8;
+  const firstItem = selectedItems[0];
+  const minDuration = (firstItem as any)?.min_duration ?? 1;
+  const maxDuration = (firstItem as any)?.max_duration ?? 8;
 
   const hasFixedSlots = slots.some((s) => s.slot_id);
 
@@ -69,12 +70,12 @@ export function Step2Scheduling() {
       setPriceLoading(true);
       try {
         const pricing = await fetchPricing({
-          space_id: spaceId!,
+          space_id: primaryId,
           date: selectedDate!,
           start_time: slot.start,
           end_time: slot.end,
           extras: [],
-          package_id: selectedPackage?.id,
+          package_id: selectedItems.find((i) => i.type === "package")?.id,
         });
         setPricePreview(pricing.total_price);
       } catch (e) {
@@ -97,14 +98,14 @@ export function Step2Scheduling() {
   const today = new Date().toISOString().split("T")[0];
 
   useEffect(() => {
-    if (!selectedDate || !spaceId) return;
+    if (!selectedDate || !primaryId) return;
     setLoading(true);
     setError("");
-    fetchAvailability(spaceId, selectedDate)
+    fetchAvailability(primaryId, selectedDate)
       .then((res) => setSlots(res.slots))
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [selectedDate, spaceId]);
+  }, [selectedDate, primaryId]);
 
   // Sequential available end slots starting from minDuration (excluding default)
   const endTimeOptions: TimeSlot[] = [];
