@@ -47,6 +47,7 @@ interface BookingState {
   setStartTime: (time: string) => void;
   setEndTime: (time: string) => void;
   setAvailableExtras: (extras: Extra[]) => void;
+  toggleItem: (item: Space | Package) => void;
   toggleExtra: (extra_id: number, quantity?: number) => void;
   setCustomerField: (key: string, value: CustomerValue) => void;
   setCustomerFields: (fields: CustomField[]) => void;
@@ -194,6 +195,72 @@ export const useBookingStore = create<BookingState>()((set, get) => ({
     );
     set({ selectedItems: newSelected, lockedResourceIds: newLocked });
     console.log("removeItem done");
+  },
+
+  // Unified toggle function for cards/checkboxes
+  toggleItem: (item: Space | Package) => {
+    const targetId = Number(item.id);
+    const state = get();
+    const isSelected = state.selectedItems.some(
+      (i) => Number(i.id) === targetId,
+    );
+
+    if (isSelected) {
+      // 1. IMMUTABLE REMOVAL
+      const updatedItems = state.selectedItems.filter(
+        (i) => Number(i.id) !== targetId,
+      );
+      const computeLocked = (items: SelectionItem[]): number[] => {
+        const map = state.resourceMap;
+        if (!map) return [];
+        const locked = new Set<number>();
+        for (const it of items) {
+          const footprint = map[it.id]?.footprint ?? [it.id];
+          footprint.forEach((id) => locked.add(id));
+        }
+        return Array.from(locked);
+      };
+      const newLocked = computeLocked(updatedItems);
+      set({ selectedItems: updatedItems, lockedResourceIds: newLocked });
+
+      console.log(`Unselected: ${targetId}. Re-computing locks...`);
+    } else {
+      // 3. VALIDATED ADDITION
+      if (!state.resourceMap) {
+        alert("Resource map loading...");
+        return;
+      }
+      const map = state.resourceMap;
+      const itemFootprint = map[targetId]?.footprint ?? [targetId];
+      const hasOverlap = itemFootprint.some((id) =>
+        state.lockedResourceIds.includes(id),
+      );
+      if (hasOverlap) {
+        console.warn(
+          "Cannot add: Item is physically locked by another selection.",
+        );
+        alert("Conflicts with current selection: overlaps physical resources.");
+        return;
+      }
+      const typedItem: SelectionItem = (
+        "space_ids" in item
+          ? { ...item, type: "package" as const }
+          : { ...item, type: "space" as const }
+      ) as SelectionItem;
+      const updatedItems = [...state.selectedItems, typedItem];
+      const computeLocked = (items: SelectionItem[]): number[] => {
+        const locked = new Set<number>();
+        for (const it of items) {
+          const footprint = map[it.id]?.footprint ?? [it.id];
+          footprint.forEach((id) => locked.add(id));
+        }
+        return Array.from(locked);
+      };
+      const newLocked = computeLocked(updatedItems);
+      set({ selectedItems: updatedItems, lockedResourceIds: newLocked });
+
+      console.log(`Selected: ${targetId}. Updating locks...`);
+    }
   },
   clearItems: () => set({ selectedItems: [], lockedResourceIds: [] }),
   getLockedResourceIds: () => {

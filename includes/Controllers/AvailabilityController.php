@@ -3,6 +3,7 @@
 namespace SpaceBooking\Controllers;
 
 use SpaceBooking\Services\AvailabilityService;
+use SpaceBooking\Services\BookingRepository;
 use SpaceBooking\Services\InventoryService;
 use SpaceBooking\Services\PricingService;
 use WP_REST_Controller;
@@ -25,7 +26,8 @@ final class AvailabilityController extends WP_REST_Controller
 
 	public function __construct()
 	{
-		$this->availability = new AvailabilityService();
+		$repo = new BookingRepository();
+		$this->availability = new AvailabilityService($repo);
 		$this->inventory = new InventoryService();
 		$this->pricing = new PricingService();
 	}
@@ -101,6 +103,11 @@ final class AvailabilityController extends WP_REST_Controller
 			$close = max(array_map(fn($s) => $s['end'], $slots));
 		}
 
+		$message = null;
+		if ($is_fixed && empty($slots)) {
+			$message = 'No availability for this day. Please choose another day.';
+		}
+
 		return rest_ensure_response([
 			'date' => $date,
 			'space_id' => $space_id,
@@ -108,6 +115,7 @@ final class AvailabilityController extends WP_REST_Controller
 			'close_time' => $close,
 			'slots' => $slots,
 			'is_fixed_slots' => $is_fixed,
+			'message' => $message,
 		]);
 	}
 

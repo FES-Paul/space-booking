@@ -3,6 +3,7 @@
 namespace SpaceBooking\Controllers;
 
 use SpaceBooking\Services\AvailabilityService;
+use SpaceBooking\Services\BookingRepository;
 use WP_REST_Controller;
 use WP_REST_Response;
 use WP_REST_Server;
@@ -16,7 +17,8 @@ final class ConflictsController extends WP_REST_Controller
 
     public function __construct()
     {
-        $this->availability = new AvailabilityService();
+        $repo = new BookingRepository();
+        $this->availability = new AvailabilityService($repo);
     }
 
     public function register_routes(): void

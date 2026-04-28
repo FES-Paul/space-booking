@@ -17,8 +17,7 @@ export function Step1Selection() {
   const {
     selectedItems,
     lockedResourceIds,
-    addItem,
-    removeItem,
+    toggleItem,
     loadResourceMap,
     nextStep,
     hasCartBooking,
@@ -45,51 +44,27 @@ export function Step1Selection() {
     checkCartBooking();
   }, [checkCartBooking]);
 
-  // Unified toggle handler
+  // Use store toggleItem directly
   const handleSelect = useCallback(
     (item: Space | Package, type: "space" | "package") => {
-      const itemId = item.id;
-      const isSelected = selectedItems.some((i) => i.id === itemId);
-
-      let typedItem: SelectionItem;
-      if ("space_ids" in item) {
-        typedItem = {
-          ...item,
-          type: "package" as const,
-          physicalSpaceIds: item.physicalSpaceIds || [],
-        } as SelectionItem;
-      } else {
-        typedItem = {
-          ...item,
-          type: "space" as const,
-          physicalSpaceIds: item.physicalSpaceIds || [item.id],
-        } as SelectionItem;
-      }
-
-      if (isSelected) {
-        // Unselect: remove by ID (functional update in store)
-        removeItem(itemId);
-      } else {
-        // Select: add item
-        addItem(typedItem);
-      }
+      toggleItem(item);
     },
-    [selectedItems, addItem, removeItem],
+    [toggleItem],
   );
 
-  // Check if item is locked (overlaps with locked resources)
-  const isLocked = useCallback(
+  // Check if item is locked (overlaps with locked resources) - task pattern
+  const isLockedCard = useCallback(
     (item: Space | Package) => {
-      const itemFootprint = item.physicalSpaceIds || [item.id];
-      return itemFootprint.some((id) => lockedResourceIds.includes(id));
+      const isSel = selectedItems.some((i) => Number(i.id) === Number(item.id));
+      return lockedResourceIds.includes(Number(item.id)) && !isSel;
     },
-    [lockedResourceIds],
+    [lockedResourceIds, selectedItems],
   );
 
-  // Check if item is selected
-  const isSelected = useCallback(
-    (itemId: number) => {
-      return selectedItems.some((i) => i.id === itemId);
+  // Check if item is selected - Number coercion
+  const isSelectedCard = useCallback(
+    (item: Space | Package) => {
+      return selectedItems.some((i) => Number(i.id) === Number(item.id));
     },
     [selectedItems],
   );
@@ -97,11 +72,11 @@ export function Step1Selection() {
   const canProceed = selectedItems.length > 0 && !hasCartBooking;
 
   const renderCard = (item: Space | Package, type: "space" | "package") => {
-    const itemId = item.id;
-    const selected = isSelected(itemId);
-    const locked = isLocked(item);
+    const selected = isSelectedCard(item);
+    const locked = isLockedCard(item);
     const space = item as Space;
     const overrides = space.price_overrides ?? [];
+    const itemId = item.id;
 
     return (
       <div
@@ -215,8 +190,8 @@ export function Step1Selection() {
         Choose Spaces or Packages (Multi-Select)
       </h2>
       <p className="sb-step__subtitle">
-        Selected: {selectedItems.length} items | Locked resources:{" "}
-        {lockedResourceIds.length}
+        {/* Selected: {selectedItems.length} items | Locked resources:{" "}
+        {lockedResourceIds.length} */}
       </p>
 
       {/* Tabs */}

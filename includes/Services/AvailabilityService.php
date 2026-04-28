@@ -2,6 +2,7 @@
 
 namespace SpaceBooking\Services;
 
+use SpaceBooking\Services\BookingRepository;
 use DateInterval;
 use DateTime;
 
@@ -13,11 +14,15 @@ use DateTime;
  */
 final class AvailabilityService
 {
-	private ?BookingRepository $repo = null;
+	private BookingRepository $repo;
 
-	public function __construct()
+	public function __construct(BookingRepository $repo = null)
 	{
-		// Lazy init repo to avoid class load issues during plugin init
+		if ($repo === null) {
+			$this->repo = new BookingRepository();
+		} else {
+			$this->repo = $repo;
+		}
 	}
 
 	/**
@@ -87,19 +92,21 @@ final class AvailabilityService
 	}
 
 	/**
-	 * Returns available slots as [ ['start' => '14:00', 'end' => '15:00', 'available' => true], ... ]
-	 *
-	 * @param int    $space_id
-	 * @param string $date       Y-m-d
-	 * @param int    $step_mins  Slot step in minutes (default 60)
-	 */
-
-	/**
 	 * New fixed slots logic - load from meta, check availability against booked
 	 */
-	public function get_fixed_slots(int $space_id, string $date): array
+	public function get_fixed_slots(array|int $space_ids, string $date): array
 	{
-		$date_overrides = get_post_meta($space_id, '_sb_date_overrides', true);
+		if (!is_array($space_ids)) {
+			$space_ids = [$space_ids];
+		}
+
+		$primary_id = $space_ids[array_key_first($space_ids)] ?? $space_ids[0] ?? 0;
+
+		if ($primary_id === 0) {
+			return [];
+		}
+
+		$date_overrides = get_post_meta($primary_id, '_sb_date_overrides', true);
 		if (is_array($date_overrides) && isset($date_overrides[$date])) {
 			$override = $date_overrides[$date];
 			if ($override['status'] === 'closed') {
@@ -111,18 +118,16 @@ final class AvailabilityService
 				return [];
 			}
 		} else {
-			$fixed_slots = get_post_meta($space_id, '_sb_fixed_slots', true);
+			$fixed_slots = get_post_meta($primary_id, '_sb_fixed_slots', true);
 			if (!is_array($fixed_slots) || empty($fixed_slots)) {
 				return [];  // No fixed slots defined
 			}
 		}
 
-		if ($this->repo === null)
-			$this->repo = new \SpaceBooking\Services\BookingRepository();
-		$booked_intervals = $this->repo->get_confirmed_intervals($space_id, $date);
+		$booked_intervals = $this->repo->get_confirmed_intervals_for_spaces($space_ids, $date);
 
-		$space_pre_buf = (int) get_post_meta($space_id, '_sb_buffer_pre_minutes', true) ?: (int) get_option('sb_buffer_pre_minutes', 0);
-		$space_post_buf = (int) get_post_meta($space_id, '_sb_buffer_post_minutes', true) ?: (int) get_option('sb_buffer_post_minutes', 0);
+		$space_pre_buf = (int) get_post_meta($primary_id, '_sb_buffer_pre_minutes', true) ?: (int) get_option('sb_buffer_pre_minutes', 0);
+		$space_post_buf = (int) get_post_meta($primary_id, '_sb_buffer_post_minutes', true) ?: (int) get_option('sb_buffer_post_minutes', 0);
 
 		$slots = [];
 		foreach ($fixed_slots as $slot_data) {
@@ -157,7 +162,7 @@ final class AvailabilityService
 		$conflict_ids = $this->get_conflict_groups($space_ids);
 
 		// Primary space for meta
-		$primary_id = $space_ids[0];
+		$primary_id = $space_ids[array_key_first($space_ids)] ?? $space_ids[0] ?? 0;
 
 		// Check if fixed slots exist on primary
 		$fixed_slots = get_post_meta($primary_id, '_sb_fixed_slots', true);
@@ -173,7 +178,7 @@ final class AvailabilityService
 		}
 
 		$slots = $this->generate_slots($open, $close, $step_mins);
-		$booked_intervals = $this->repo->get_confirmed_intervals($conflict_ids, $date);
+		$booked_intervals = $this->repo->get_confirmed_intervals_for_spaces($conflict_ids, $date);
 		[$pre_buf, $post_buf] = $this->resolve_buffers($primary_id);
 		$inflated_intervals = array_map(function ($b) use ($pre_buf, $post_buf) {
 			return [
@@ -225,8 +230,6 @@ final class AvailabilityService
 		if ($raw_open_min >= $raw_close_min) {
 			return [null, null];
 		}
-		return [$effective_open, $effective_close];
-
 		return [$effective_open, $effective_close];
 	}
 

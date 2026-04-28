@@ -95,6 +95,25 @@ class BookingRepository
 		), ARRAY_A) ?: [];
 	}
 
+	public function get_confirmed_intervals_for_spaces(array $space_ids, string $date): array
+	{
+		if (empty($space_ids)) {
+			return [];
+		}
+
+		global $wpdb;
+
+		$space_ids_placeholder = implode(',', array_fill(0, count($space_ids), '%d'));
+		$space_ids_params = $space_ids;
+
+		return $wpdb->get_results($wpdb->prepare("
+			SELECT start_time as start, end_time as end
+            FROM {$wpdb->prefix}sb_bookings 
+            WHERE space_id IN ({$space_ids_placeholder}) AND booking_date = %s AND status IN ('confirmed', 'in_review', 'shadow')
+            ORDER BY start_time",
+			...array_merge($space_ids_params, [$date])), ARRAY_A) ?: [];
+	}
+
 	public function create_shadow(int $parent_id, int $space_id, string $date, string $start_time, string $end_time): int
 	{
 		global $wpdb;
@@ -123,21 +142,26 @@ class BookingRepository
 	public function cleanup_expired(): int
 	{
 		global $wpdb;
+		$table = $wpdb->prefix . 'sb_bookings';
+		$extras_table = $wpdb->prefix . 'sb_booking_extras';
 
-		$deleted = $wpdb->delete(
-			$wpdb->prefix . 'sb_bookings',
-			['status' => 'pending', 'expired_at <= NOW()'],
-			['%s', '%s']
-		);
+		// Delete main bookings with safe prepared query
+		$result = $wpdb->query($wpdb->prepare(
+			"DELETE FROM {$table} WHERE status = %s AND expired_at <= NOW()",
+			'pending'
+		));
 
-		// Also delete associated extras
-		if ($deleted > 0) {
-			$wpdb->query("DELETE be FROM {$wpdb->prefix}sb_booking_extras be
-                         JOIN {$wpdb->prefix}sb_bookings b ON b.id = be.booking_id
-                         WHERE b.status = 'pending' AND b.expired_at <= NOW()");
+		// Delete associated extras
+		if ($result !== false && $result > 0) {
+			$wpdb->query($wpdb->prepare(
+				"DELETE be FROM {$extras_table} be
+			\t JOIN {$table} b ON b.id = be.booking_id
+			\t WHERE b.status = %s AND b.expired_at <= NOW()",
+				'pending'
+			));
 		}
 
-		return $deleted;
+		return (int) $result;
 	}
 
 	public function get_extras(int $booking_id): array
