@@ -96,16 +96,18 @@ final class AvailabilityController extends WP_REST_Controller
 		$slots = $this->availability->get_slots($space_id, $date);
 		[$open, $close] = $this->availability->resolve_effective_hours($space_id, $date);
 
-		// For fixed slots, compute effective open/close from slots
-		$is_fixed = !empty(get_post_meta($space_id, '_sb_fixed_slots', true));
-		if ($is_fixed && !empty($slots)) {
+		// FIXED-PRIORITY: Detect if fixed mode defined (even empty)
+		$has_fixed_slots = $this->availability->has_fixed_slots_defined($space_id);
+
+		// For fixed slots display, compute effective open/close from slots
+		if ($has_fixed_slots && !empty($slots)) {
 			$open = min(array_map(fn($s) => $s['start'], $slots));
 			$close = max(array_map(fn($s) => $s['end'], $slots));
 		}
 
 		$message = null;
-		if ($is_fixed && empty($slots)) {
-			$message = 'No availability for this day. Please choose another day.';
+		if ($has_fixed_slots && empty($slots)) {
+			$message = 'This space operates on a fixed schedule and is fully booked or closed for this date.';
 		}
 
 		return rest_ensure_response([
@@ -114,7 +116,8 @@ final class AvailabilityController extends WP_REST_Controller
 			'open_time' => $open,
 			'close_time' => $close,
 			'slots' => $slots,
-			'is_fixed_slots' => $is_fixed,
+			'has_fixed_slots' => $has_fixed_slots,
+			'is_fixed_slots' => !empty($slots) && isset($slots[0]['slot_id']),
 			'message' => $message,
 		]);
 	}

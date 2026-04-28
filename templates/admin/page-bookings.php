@@ -241,37 +241,45 @@ defined('ABSPATH') || exit;
                                 $edit_url = admin_url('admin.php?page=space-booking-bookings&edit=' . $b['id']);
                                 echo '<a href="' . esc_url($edit_url) . '" class="sb-booking" style="text-decoration:none; color:inherit; display:block;">';
                                 echo esc_html($time . ' - ' . $b['customer_name']);
-                                echo ' <span class="sb-status sb-status--' . esc_attr($b['status']) . '">' . str_replace('_', ' ', esc_html(ucfirst($b['status']))) . '</span>';
-                                echo '</a>';
-                            }
-                        }
-                        echo '</div>';
-                    }
-                    echo '</div>';
-                    echo '</section>';
-                }
+                                <?php $marketing = $wpdb->get_var($wpdb->prepare("SELECT meta_value FROM {$wpdb->prefix}sb_booking_meta WHERE booking_id = %d AND meta_key = '_sb_marketing_source'", $b['id'])); ?>
+            <?php if ($marketing): ?>
+            <br><small style="opacity:0.7;">📈 <?php echo esc_html($marketing); ?></small>
+            <?php endif; ?>
+            echo ' <span class="sb-status sb-status--' . esc_attr($b['status']) . '">' . str_replace('_', ' ',
+                esc_html(ucfirst($b['status']))) . '</span>';
+            echo '</a>';
+
             }
-            ?>
-        </div>
-    </div>
+            }
+            echo '
+        </div>';
+        }
+        echo '
+    </div>';
+    echo '</section>';
+    }
+    }
+    ?>
+</div>
+</div>
 
 
 
-    <script>
-    jQuery(document).ready(function($) {
-        // No JS needed for bookings-only page
+<script>
+jQuery(document).ready(function($) {
+    // No JS needed for bookings-only page
 
-        // Tab switching
-        $('.sb-tab-btn').on('click', function() {
-            $('.sb-tab-btn').removeClass('active');
-            $('.sb-tab-content').removeClass('active');
-            $(this).addClass('active');
-            $('#' + $(this).data('tab') + '-tab').addClass('active');
-        });
+    // Tab switching
+    $('.sb-tab-btn').on('click', function() {
+        $('.sb-tab-btn').removeClass('active');
+        $('.sb-tab-content').removeClass('active');
+        $(this).addClass('active');
+        $('#' + $(this).data('tab') + '-tab').addClass('active');
+    });
 
-        // Add field
-        $('#sb-add-field').on('click', function() {
-            const newFieldHtml = `
+    // Add field
+    $('#sb-add-field').on('click', function() {
+        const newFieldHtml = `
                 <div class="sb-field-row" data-index="${fieldIndex}">
                     <div class="sb-field-col"><label>Key <span class="required">*</span></label><input type="text" name="fields[${fieldIndex}][key]" required maxlength="50" /></div>
                     <div class="sb-field-col"><label>Label <span class="required">*</span></label><input type="text" name="fields[${fieldIndex}][label]" required maxlength="100" /></div>
@@ -288,166 +296,166 @@ defined('ABSPATH') || exit;
                     <div class="sb-field-col sb-options-col"><label>Options (JSON)</label><textarea name="fields[${fieldIndex}][options]" rows="2" placeholder='["Opt1","Opt2"]'></textarea><small>Radio/Select only</small></div>
                     <div class="sb-field-actions"><button type="button" class="button-link sb-remove-field">×</button><div class="sb-drag-handle">⋮⋮</div></div>
                 </div>`;
-            $('#sb-fields-repeater').append(newFieldHtml);
-            fieldIndex++;
+        $('#sb-fields-repeater').append(newFieldHtml);
+        fieldIndex++;
+    });
+
+    // Remove field
+    $(document).on('click', '.sb-remove-field', function() {
+        $(this).closest('.sb-field-row').remove();
+    });
+
+    // Save fields
+    $('#sb-save-fields').on('click', function() {
+        const fieldsData = [];
+        $('#sb-fields-repeater .sb-field-row').each(function() {
+            const row = $(this);
+            const field = {
+                key: row.find('[name*="[key]"]').val(),
+                label: row.find('[name*="[label]"]').val(),
+                type: row.find('[name*="[type]"]').val(),
+                required: row.find('[name*="[required]"]').is(':checked'),
+                placeholder: row.find('[name*="[placeholder]"]').val(),
+                default: row.find('[name*="[default]"]').val(),
+                options: row.find('[name*="[options]"]').val()
+            };
+            fieldsData.push(field);
         });
 
-        // Remove field
-        $(document).on('click', '.sb-remove-field', function() {
-            $(this).closest('.sb-field-row').remove();
-        });
-
-        // Save fields
-        $('#sb-save-fields').on('click', function() {
-            const fieldsData = [];
-            $('#sb-fields-repeater .sb-field-row').each(function() {
-                const row = $(this);
-                const field = {
-                    key: row.find('[name*="[key]"]').val(),
-                    label: row.find('[name*="[label]"]').val(),
-                    type: row.find('[name*="[type]"]').val(),
-                    required: row.find('[name*="[required]"]').is(':checked'),
-                    placeholder: row.find('[name*="[placeholder]"]').val(),
-                    default: row.find('[name*="[default]"]').val(),
-                    options: row.find('[name*="[options]"]').val()
-                };
-                fieldsData.push(field);
-            });
-
-            if (fieldsData.length === 0) {
-                $('#sb-fields-status').html('<span class="error">At least one field required</span>');
-                return;
-            }
-
-            $.post(ajaxurl, {
-                action: 'sb_save_customer_fields',
-                fields: JSON.stringify(fieldsData),
-                _wpnonce: nonce
-            }, function(res) {
-                if (res.success) {
-                    $('#sb-fields-status').html('<span style="color:green">✓ ' + res.data
-                        .message + '</span>');
-                    updatePreview(fieldsData);
-                } else {
-                    $('#sb-fields-status').html('<span class="error">✗ ' + res.data +
-                        '</span>');
-                }
-            });
-        });
-
-        function updatePreview(fields) {
-            let preview = '';
-            fields.forEach(function(field) {
-                preview += '<div class="sb-field-preview"><label>' + field.label + (field.required ?
-                    ' *' : '') + '</label>';
-                if (field.type === 'textarea') {
-                    preview += '<textarea placeholder="' + (field.placeholder || '') +
-                        '" style="width:300px;height:60px"></textarea>';
-                } else if (field.type === 'checkbox') {
-                    preview += '<input type="checkbox">';
-                } else if (field.type === 'radio' || field.type === 'select') {
-                    preview += field.type === 'radio' ? '<label><input type="radio"> Opt1</label>' :
-                        '<select><option>Opt1</option></select>';
-                } else {
-                    preview += '<input type="' + field.type + '" placeholder="' + (field.placeholder ||
-                        '') + '" style="width:300px" />';
-                }
-                preview += '</div>';
-            });
-            $('#sb-fields-preview').html(preview);
+        if (fieldsData.length === 0) {
+            $('#sb-fields-status').html('<span class="error">At least one field required</span>');
+            return;
         }
 
-        // Initial preview
-        <?php if (!empty($fields)): ?>
-        updatePreview(<?php echo json_encode($fields); ?>);
-        <?php endif; ?>
+        $.post(ajaxurl, {
+            action: 'sb_save_customer_fields',
+            fields: JSON.stringify(fieldsData),
+            _wpnonce: nonce
+        }, function(res) {
+            if (res.success) {
+                $('#sb-fields-status').html('<span style="color:green">✓ ' + res.data
+                    .message + '</span>');
+                updatePreview(fieldsData);
+            } else {
+                $('#sb-fields-status').html('<span class="error">✗ ' + res.data +
+                    '</span>');
+            }
+        });
     });
-    </script>
 
-    <!-- No customizer styles needed -->
-    <style>
-    #sb-customize-fields label {
-        font-weight: 600;
-        font-size: 13px;
-        margin-bottom: 4px;
-        display: block;
+    function updatePreview(fields) {
+        let preview = '';
+        fields.forEach(function(field) {
+            preview += '<div class="sb-field-preview"><label>' + field.label + (field.required ?
+                ' *' : '') + '</label>';
+            if (field.type === 'textarea') {
+                preview += '<textarea placeholder="' + (field.placeholder || '') +
+                    '" style="width:300px;height:60px"></textarea>';
+            } else if (field.type === 'checkbox') {
+                preview += '<input type="checkbox">';
+            } else if (field.type === 'radio' || field.type === 'select') {
+                preview += field.type === 'radio' ? '<label><input type="radio"> Opt1</label>' :
+                    '<select><option>Opt1</option></select>';
+            } else {
+                preview += '<input type="' + field.type + '" placeholder="' + (field.placeholder ||
+                    '') + '" style="width:300px" />';
+            }
+            preview += '</div>';
+        });
+        $('#sb-fields-preview').html(preview);
     }
 
-    #sb-customize-fields input,
-    #sb-customize-fields select,
-    #sb-customize-fields textarea {
-        width: 100%;
-        padding: 6px;
-        border: 1px solid #ddd;
-        border-radius: 3px;
-        font-size: 13px;
+    // Initial preview
+    <?php if (!empty($fields)): ?>
+    updatePreview(<?php echo json_encode($fields); ?>);
+    <?php endif; ?>
+});
+</script>
+
+<!-- No customizer styles needed -->
+<style>
+#sb-customize-fields label {
+    font-weight: 600;
+    font-size: 13px;
+    margin-bottom: 4px;
+    display: block;
+}
+
+#sb-customize-fields input,
+#sb-customize-fields select,
+#sb-customize-fields textarea {
+    width: 100%;
+    padding: 6px;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    font-size: 13px;
+}
+
+#sb-customize-fields .sb-field-col {
+    display: flex;
+    flex-direction: column;
+}
+
+#sb-customize-fields .sb-field-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+}
+
+#sb-customize-fields .sb-drag-handle {
+    cursor: grab;
+    font-size: 20px;
+    user-select: none;
+}
+
+#sb-customize-fields .sb-drag-handle:active {
+    cursor: grabbing;
+}
+
+#sb-customize-fields .required {
+    color: #d63638;
+}
+
+#sb-customize-fields .sb-options-col small {
+    font-size: 11px;
+    color: #666;
+}
+
+.sb-field-preview {
+    margin-bottom: 15px;
+}
+
+.sb-field-preview label {
+    font-weight: 600;
+}
+
+.sb-field-preview input,
+.sb-field-preview textarea {
+    border: 1px solid #ccc;
+    padding: 8px;
+    border-radius: 4px;
+}
+
+#sb-fields-status .error {
+    color: #d63638;
+}
+
+@media (max-width: 1200px) {
+    #sb-customize-fields .sb-field-row {
+        grid-template-columns: 1fr 1fr 1fr 1fr;
     }
 
-    #sb-customize-fields .sb-field-col {
-        display: flex;
-        flex-direction: column;
+    #sb-customize-fields .sb-options-col {
+        grid-column: 1 / -1;
     }
 
     #sb-customize-fields .sb-field-actions {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 5px;
+        grid-column: -1;
+        justify-self: end;
     }
+}
+</style>
 
-    #sb-customize-fields .sb-drag-handle {
-        cursor: grab;
-        font-size: 20px;
-        user-select: none;
-    }
-
-    #sb-customize-fields .sb-drag-handle:active {
-        cursor: grabbing;
-    }
-
-    #sb-customize-fields .required {
-        color: #d63638;
-    }
-
-    #sb-customize-fields .sb-options-col small {
-        font-size: 11px;
-        color: #666;
-    }
-
-    .sb-field-preview {
-        margin-bottom: 15px;
-    }
-
-    .sb-field-preview label {
-        font-weight: 600;
-    }
-
-    .sb-field-preview input,
-    .sb-field-preview textarea {
-        border: 1px solid #ccc;
-        padding: 8px;
-        border-radius: 4px;
-    }
-
-    #sb-fields-status .error {
-        color: #d63638;
-    }
-
-    @media (max-width: 1200px) {
-        #sb-customize-fields .sb-field-row {
-            grid-template-columns: 1fr 1fr 1fr 1fr;
-        }
-
-        #sb-customize-fields .sb-options-col {
-            grid-column: 1 / -1;
-        }
-
-        #sb-customize-fields .sb-field-actions {
-            grid-column: -1;
-            justify-self: end;
-        }
-    }
-    </style>
-
-    <?php
+<?php
     ?>

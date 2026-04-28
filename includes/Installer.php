@@ -103,6 +103,7 @@ final class Installer
 		(new \SpaceBooking\Migrations\AddExpiredAt())->run();
 		(new \SpaceBooking\Migrations\AddInReviewStatus())->run();
 		(new \SpaceBooking\Migrations\AddParentBookingId())->run();
+		(new \SpaceBooking\Migrations\AddBookingMeta())->run();
 
 		update_option('sb_db_version', SB_VERSION);
 	}

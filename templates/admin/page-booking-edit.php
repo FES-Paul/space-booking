@@ -231,10 +231,19 @@ $status_color = [
             <div><strong>Email:</strong> <?php echo esc_html($booking['customer_email']); ?></div>
             <?php if ($booking['customer_phone']): ?><div><strong>Phone:</strong>
                 <?php echo esc_html($booking['customer_phone']); ?></div><?php endif; ?>
-            <?php if ($booking['notes']): ?><div><strong>Notes:</strong> <?php echo esc_html($booking['notes']); ?></div>
+            <?php if ($booking['notes']): ?><div><strong>Notes:</strong> <?php echo esc_html($booking['notes']); ?>
+            </div>
+            <?php endif; ?>
+            <?php
+            $repo = new \SpaceBooking\Services\BookingRepository();
+            $marketing = $repo->get_meta($booking_id, '_sb_marketing_source');
+            if ($marketing):
+                ?>
+            <div><strong>📈 How did you hear about us?</strong> <?php echo esc_html($marketing); ?></div>
             <?php endif; ?>
         </div>
     </div>
+
 
     <div class="sb-section">
         <h3>💰 Pricing</h3>

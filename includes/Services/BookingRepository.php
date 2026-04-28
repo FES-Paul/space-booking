@@ -36,8 +36,73 @@ class BookingRepository
 		$booking['_space_title'] = $space->post_title ?? 'Unknown Space';
 		$booking['_package_title'] = $package ? $package->post_title : null;
 		$booking['_extras'] = $this->get_extras($id);
+		$booking['_meta_data'] = $this->get_all_meta($id);
 
 		return $booking;
+	}
+
+	/**
+	 * Save meta value for booking
+	 */
+	public function save_meta(int $booking_id, string $meta_key, string $meta_value): void
+	{
+		global $wpdb;
+
+		$table = $wpdb->prefix . 'sb_booking_meta';
+
+		// Delete existing
+		$wpdb->delete(
+			$table,
+			['booking_id' => $booking_id, 'meta_key' => $meta_key],
+			['%d', '%s']
+		);
+
+		// Insert new
+		if (!empty($meta_value)) {
+			$wpdb->insert(
+				$table,
+				[
+					'booking_id' => $booking_id,
+					'meta_key' => $meta_key,
+					'meta_value' => $meta_value
+				],
+				['%d', '%s', '%s']
+			);
+		}
+	}
+
+	/**
+	 * Get single meta value
+	 */
+	public function get_meta(int $booking_id, string $meta_key): ?string
+	{
+		global $wpdb;
+
+		$value = $wpdb->get_var($wpdb->prepare(
+			"SELECT meta_value FROM {$wpdb->prefix}sb_booking_meta WHERE booking_id = %d AND meta_key = %s",
+			$booking_id, $meta_key
+		));
+
+		return $value ?: null;
+	}
+
+	/**
+	 * Get all meta for booking
+	 */
+	public function get_all_meta(int $booking_id): array
+	{
+		global $wpdb;
+
+		$meta = $wpdb->get_results($wpdb->prepare(
+			"SELECT meta_key, meta_value FROM {$wpdb->prefix}sb_booking_meta WHERE booking_id = %d",
+			$booking_id
+		), ARRAY_A) ?: [];
+
+		$result = [];
+		foreach ($meta as $item) {
+			$result[$item['meta_key']] = $item['meta_value'];
+		}
+		return $result;
 	}
 
 	public function create(array $data): int
@@ -73,6 +138,11 @@ class BookingRepository
 		}
 
 		$booking_id = $wpdb->insert_id;
+
+		// Save marketing_source meta if provided
+		if (isset($data['marketing_source']) && !empty($data['marketing_source'])) {
+			$this->save_meta($booking_id, '_sb_marketing_source', $data['marketing_source']);
+		}
 
 		// Insert extras if present
 		if (!empty($data['extras'])) {

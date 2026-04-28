@@ -154,6 +154,37 @@ final class AvailabilityService
 		return $slots;
 	}
 
+	public function has_fixed_slots_defined(array|int $space_ids): bool
+	{
+		if (!is_array($space_ids)) {
+			$space_ids = [$space_ids];
+		}
+
+		$primary_id = $space_ids[array_key_first($space_ids)] ?? $space_ids[0] ?? 0;
+
+		if ($primary_id === 0) {
+			return false;
+		}
+
+		// Check default fixed slots
+		$fixed_slots = get_post_meta($primary_id, '_sb_fixed_slots', true);
+		if (is_array($fixed_slots) && !empty($fixed_slots)) {
+			return true;
+		}
+
+		// Check date-specific overrides
+		$date_overrides = get_post_meta($primary_id, '_sb_date_overrides', true);
+		if (is_array($date_overrides)) {
+			foreach ($date_overrides as $override) {
+				if (isset($override['status']) && $override['status'] === 'custom' && !empty($override['slots'])) {
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
 	public function get_slots(int|array $space_ids, string $date, int $step_mins = 60): array
 	{
 		if (!is_array($space_ids))
@@ -164,9 +195,8 @@ final class AvailabilityService
 		// Primary space for meta
 		$primary_id = $space_ids[array_key_first($space_ids)] ?? $space_ids[0] ?? 0;
 
-		// Check if fixed slots exist on primary
-		$fixed_slots = get_post_meta($primary_id, '_sb_fixed_slots', true);
-		if (is_array($fixed_slots) && !empty($fixed_slots)) {
+		// FIXED-PRIORITY: Check if fixed slots defined on primary (before conflicts)
+		if ($this->has_fixed_slots_defined($primary_id)) {
 			return $this->get_fixed_slots($conflict_ids, $date);
 		}
 

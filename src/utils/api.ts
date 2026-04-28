@@ -42,9 +42,9 @@ export const fetchPackages = () => apiFetch<Package[]>("/packages");
 
 // ── Availability ──────────────────────────────────────────────────────────────
 
-export const fetchAvailability = (spaceId: number, date: string) =>
+export const fetchAvailability = (primarySpaceId: number, date: string) =>
   apiFetch<AvailabilityResponse>(
-    `/availability?space_id=${spaceId}&date=${date}`,
+    `/availability?space_id=${primarySpaceId}&date=${date}`,
   );
 
 // ── Extras ────────────────────────────────────────────────────────────────────

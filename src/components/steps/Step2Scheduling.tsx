@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { useBookingStore } from "@/store/bookingStore";
 import { fetchAvailability } from "@/utils/api";
-import type { TimeSlot } from "@/types";
+import type { AvailabilityResponse, TimeSlot } from "@/types";
+
 import { fetchPricing } from "@/utils/api";
 
 export function Step2Scheduling() {
@@ -18,9 +19,17 @@ export function Step2Scheduling() {
     prevStep,
   } = useBookingStore();
 
-  const primaryId = lockedResourceIds[0] || selectedItems[0]?.id || 0;
+  const primaryId =
+    lockedResourceIds[0] ||
+    selectedItems.find((i) => i.type === "space")?.id ||
+    selectedItems[0]?.id ||
+    0;
+
 
   const [slots, setSlots] = useState<TimeSlot[]>([]);
+  const [apiResponse, setApiResponse] = useState<AvailabilityResponse | null>(
+    null,
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [pricePreview, setPricePreview] = useState(0);
@@ -41,12 +50,13 @@ export function Step2Scheduling() {
     return `${hour}:${minutes} ${period}`;
   };
 
-  // Legacy dynamic mode (if no fixed slots)
   const firstItem = selectedItems[0];
   const minDuration = (firstItem as any)?.min_duration ?? 1;
   const maxDuration = (firstItem as any)?.max_duration ?? 8;
 
-  const hasFixedSlots = slots.some((s) => s.slot_id);
+  const hasFixedSlots =
+    apiResponse?.has_fixed_slots ?? slots.some((s) => s.slot_id);
+  const apiMessage = apiResponse?.message;
 
   const isStartValid = (slotIndex: number): boolean => {
     if (slotIndex + minDuration > slots.length) return false;
@@ -101,8 +111,12 @@ export function Step2Scheduling() {
     if (!selectedDate || !primaryId) return;
     setLoading(true);
     setError("");
+    setApiResponse(null);
     fetchAvailability(primaryId, selectedDate)
-      .then((res) => setSlots(res.slots))
+      .then((res) => {
+        setSlots(res.slots);
+        setApiResponse(res);
+      })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
   }, [selectedDate, primaryId]);

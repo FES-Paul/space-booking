@@ -84,6 +84,9 @@ export interface AvailabilityResponse {
   open_time: string | null;
   close_time: string | null;
   slots: TimeSlot[];
+  has_fixed_slots: boolean;
+  is_fixed_slots: boolean;
+  message?: string;
 }
 
 export interface PriceBreakdownItem {
@@ -125,9 +128,18 @@ declare module "@/utils/api" {
     customer_email: string;
     customer_phone?: string;
     notes?: string;
+    marketing_source?: string;
     extras?: SelectedExtra[];
   }
 }
+
+// Marketing source options
+export type MarketingSource =
+  | "Social Media (Instagram/Facebook)"
+  | "Google Search"
+  | "Word of Mouth / Friend"
+  | "Local Signage / Passing by"
+  | "Other";
 
 export interface CustomerBooking {
   id: number;

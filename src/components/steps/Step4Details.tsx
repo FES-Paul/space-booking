@@ -112,6 +112,52 @@ export function Step4Details() {
               )}
             </div>
           ))}
+
+          {/* Marketing Source Field - Static */}
+          <div className="sb-field">
+            <label className="sb-label" htmlFor="sb-marketing_source">
+              How did you hear about us? <span className="sb-required">*</span>
+            </label>
+            <select
+              id="sb-marketing_source"
+              className="sb-input"
+              value={(customerInfo["marketing_source"] as string) || ""}
+              onChange={(e) =>
+                handleFieldChange("marketing_source", e.target.value)
+              }
+              required
+            >
+              <option value="">Select...</option>
+              <option value="Social Media (Instagram/Facebook)">
+                Social Media (Instagram/Facebook)
+              </option>
+              <option value="Google Search">Google Search</option>
+              <option value="Word of Mouth / Friend">
+                Word of Mouth / Friend
+              </option>
+              <option value="Local Signage / Passing by">
+                Local Signage / Passing by
+              </option>
+              <option value="Other">Other</option>
+            </select>
+            {customerInfo["marketing_source"] === "Other" && (
+              <input
+                type="text"
+                className="sb-input"
+                id="sb-marketing_other"
+                placeholder="Please specify..."
+                value={(customerInfo["marketing_other"] as string) || ""}
+                onChange={(e) =>
+                  handleFieldChange("marketing_other", e.target.value)
+                }
+              />
+            )}
+            <p className="sb-error-message">
+              {customerInfo["marketing_source"] === "" &&
+                "This field is required"}
+            </p>
+          </div>
+
           <div className="sb-step__actions">
             <button
               type="button"

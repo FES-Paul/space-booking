@@ -263,6 +263,17 @@ export const useBookingStore = create<BookingState>()((set, get) => ({
     }
   },
   clearItems: () => set({ selectedItems: [], lockedResourceIds: [] }),
+  getPrimarySpaceId: () => {
+    const state = get();
+    // FIXED-PRIORITY: First locked physical space ID, then first selected item ID
+    if (state.lockedResourceIds.length > 0) {
+      return state.lockedResourceIds[0];
+    }
+    if (state.selectedItems.length > 0) {
+      return state.selectedItems[0].id;
+    }
+    return 0;
+  },
   getLockedResourceIds: () => {
     const state = get();
     if (!state.resourceMap) return [];
@@ -277,6 +288,7 @@ export const useBookingStore = create<BookingState>()((set, get) => ({
     };
     return computeLocked(state.selectedItems);
   },
+
   setSpace: (space: Space | null) => {
     if (space) {
       get().addItem({

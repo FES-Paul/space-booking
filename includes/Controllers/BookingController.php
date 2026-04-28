@@ -89,6 +89,7 @@ final class BookingController extends WP_REST_Controller
 		$email = sanitize_email($request->get_param('customer_email'));
 		$phone = sanitize_text_field($request->get_param('customer_phone') ?? '');
 		$notes = sanitize_textarea_field($request->get_param('notes') ?? '');
+		$marketing_source = sanitize_text_field($request->get_param('marketing_source') ?? '');
 		$selected_item_ids = array_map('intval', (array) $request->get_param('selected_item_ids'));
 		if (empty($selected_item_ids)) {
 			return new WP_REST_Response(['message' => 'Missing selected_item_ids.'], 422);
@@ -105,6 +106,7 @@ final class BookingController extends WP_REST_Controller
 			'customer_email' => $email,
 			'customer_phone' => $phone,
 			'notes' => $notes,
+			'marketing_source' => $marketing_source,
 			'extras' => $extras,
 		];
 
@@ -241,6 +243,7 @@ final class BookingController extends WP_REST_Controller
 				'validate_callback' => static fn($v) => is_email($v),
 			],
 			'customer_phone' => ['required' => false, 'sanitize_callback' => 'sanitize_text_field'],
+			'marketing_source' => ['required' => false, 'sanitize_callback' => 'sanitize_text_field'],
 			'notes' => ['required' => false, 'sanitize_callback' => 'sanitize_textarea_field'],
 			'extras' => ['required' => false, 'default' => []],
 			'selected_item_ids' => [
