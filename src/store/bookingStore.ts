@@ -334,21 +334,42 @@ export const useBookingStore = create<BookingState>()((set, get) => ({
   setEndTime: (time: string) => set({ selectedEndTime: time }),
 
   // ── Step 3 ───────────────────────────────────────────────────────────────
-  setAvailableExtras: (extras: Extra[]) => set({ availableExtras: extras }),
+  setAvailableExtras: (extras: Extra[]) => {
+    console.log("📦 STORE setAvailableExtras:", extras.length, "extras");
+    set({ availableExtras: extras });
+  },
 
   toggleExtra: (extra_id: number, quantity: number = 1) => {
     const current = get().selectedExtras;
+    console.group("🔄 STORE toggleExtra");
+    console.log(
+      "Before - extra_id:",
+      extra_id,
+      "current selectedExtras:",
+      current.map((e) => e.extra_id),
+    );
     const exists = current.find((e) => e.extra_id === extra_id);
 
     if (exists) {
       // Remove
+      const newExtras = current.filter((e) => e.extra_id !== extra_id);
+      console.log(
+        "REMOVE - new selectedExtras:",
+        newExtras.map((e) => e.extra_id),
+      );
       set({
-        selectedExtras: current.filter((e) => e.extra_id !== extra_id),
+        selectedExtras: newExtras,
       });
     } else {
       // Add
-      set({ selectedExtras: [...current, { extra_id, quantity }] });
+      const newExtras = [...current, { extra_id, quantity }];
+      console.log(
+        "ADD - new selectedExtras:",
+        newExtras.map((e) => e.extra_id),
+      );
+      set({ selectedExtras: newExtras });
     }
+    console.groupEnd();
   },
 
   // ── Step 4 ───────────────────────────────────────────────────────────────
@@ -445,6 +466,10 @@ export const useBookingStore = create<BookingState>()((set, get) => ({
   }) => set({ checkoutUrl, bookingId, totalPrice, priceBreakdown: breakdown }),
 
   setPriceBreakdown: (rawBreakdown: PriceBreakdownItem[], total: number) => {
+    console.group("💰 STORE setPriceBreakdown");
+    console.log("Raw breakdown:", rawBreakdown);
+    console.log("Total:", total);
+    console.groupEnd();
     const state = get();
     const breakdown = rawBreakdown.map((item: PriceBreakdownItem) => {
       let label = item.label;

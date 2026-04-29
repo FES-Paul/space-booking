@@ -1,12 +1,24 @@
 import React, { useEffect, useState } from "react";
 import { useBookingStore } from "@/store/bookingStore";
 import { fetchExtras, fetchPricing } from "@/utils/api";
-import type { Extra } from "@/types";
+import type {
+  Extra,
+  PriceBreakdownItem,
+  PricingResponse,
+  SelectedExtra,
+  Space,
+  Package,
+  SelectionItem,
+} from "@/types";
+
+interface EnrichedBreakdownItem {
+  label: string;
+  amount: number;
+}
 
 export function Step3Addons() {
   const {
-    selectedSpace,
-    selectedPackage,
+    selectedItems,
     selectedDate,
     selectedStartTime,
     selectedEndTime,
@@ -17,29 +29,68 @@ export function Step3Addons() {
     setPriceBreakdown,
     nextStep,
     prevStep,
+    getPrimarySpaceId,
   } = useBookingStore();
+
+  const spaceId = getPrimarySpaceId() ?? 0;
+  const pkgItem = selectedItems.find(
+    (item: SelectionItem) => item.type === "package",
+  ) as Package | undefined;
+  const packageId = pkgItem?.id;
+  const primarySpace = selectedItems.find(
+    (item: SelectionItem) => item.type === "space",
+  ) as Space | undefined;
+
+  // Entry logging AFTER state is available
+  console.group("🚀 STEP3 ADDONS - Entry Props");
+  console.log("spaceId:", spaceId);
+  console.log("selectedDate:", selectedDate);
+  console.log("selectedStartTime:", selectedStartTime);
+  console.log("selectedEndTime:", selectedEndTime);
+  console.log("pkgItem:", pkgItem);
+  console.log("primarySpace:", primarySpace);
+  console.log("selectedExtras:", selectedExtras);
+  console.groupEnd();
 
   const [extras, setExtras] = useState<Extra[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [preview, setPreview] = useState<{
     total: number;
-    breakdown: { label: string; amount: number }[];
+    breakdown: EnrichedBreakdownItem[];
   } | null>(null);
 
-  const spaceId = selectedSpace?.id ?? selectedPackage?.space_id ?? 0;
-  const packageId = selectedPackage?.id;
-
   useEffect(() => {
-    if (!spaceId || !selectedDate || !selectedStartTime || !selectedEndTime)
+    if (!spaceId || !selectedDate || !selectedStartTime || !selectedEndTime) {
+      console.log("STEP3: Missing required params, skipping fetchExtras");
       return;
+    }
+
+    console.group("📦 STEP3 fetchExtras");
+    console.log("Params:", {
+      spaceId,
+      selectedDate,
+      selectedStartTime,
+      selectedEndTime,
+    });
+
     setLoading(true);
     fetchExtras(spaceId, selectedDate, selectedStartTime, selectedEndTime)
       .then((data) => {
+        console.log("✅ fetchExtras RAW RESPONSE:", data);
+        console.log("Extras count:", data.length);
+        if (data.length === 0) {
+          console.warn("⚠️ Backend returned EMPTY extras array!");
+        }
         setExtras(data);
         setAvailableExtras(data);
+        console.groupEnd();
       })
-      .catch((e: Error) => setError(e.message))
+      .catch((e: Error) => {
+        console.error("❌ fetchExtras ERROR:", e.message);
+        setError(e.message);
+        console.groupEnd();
+      })
       .finally(() => setLoading(false));
   }, [
     spaceId,
@@ -51,51 +102,68 @@ export function Step3Addons() {
 
   // Re-calculate price whenever extras selection changes
   useEffect(() => {
-    if (!spaceId || !selectedDate || !selectedStartTime || !selectedEndTime)
+    if (!spaceId || !selectedDate || !selectedStartTime || !selectedEndTime) {
+      console.log("STEP3: Missing params, skipping fetchPricing");
       return;
-    fetchPricing({
+    }
+
+    console.group("💰 STEP3 fetchPricing");
+    const pricingParams = {
       space_id: spaceId,
       date: selectedDate,
       start_time: selectedStartTime,
       end_time: selectedEndTime,
       extras: selectedExtras,
       package_id: packageId,
-    })
-      .then((res) => {
-        console.log("RESPONSE BREAKDOWN: ", res);
-        const enrichedBreakdown = res.breakdown.map((item: any) => {
-          let label = item.label;
-          if (label === "Package price" && selectedPackage) {
-            label = `${selectedPackage.title}`;
-          } else if (label === "Extras" && selectedExtras.length > 0) {
-            const extraNames = selectedExtras
-              .map((e: any) => {
-                const extra = availableExtras.find(
-                  (ex: any) => ex.id === e.extra_id,
-                );
-                return extra ? extra.title : `Extra #${e.extra_id}`;
-              })
-              .join(" + ");
-            label = `Extras: ${extraNames}`;
-          } else if (
-            selectedSpace &&
-            (label.includes("–") || label.match(/^\\d{2}:\\d{2}–\\d{2}:\\d{2}/))
-          ) {
-            label = `${selectedSpace.title}: ${label}`;
-          }
-          return { ...item, label };
-        });
+    };
+    console.log("Params sent to /pricing:", pricingParams);
+
+    fetchPricing(pricingParams)
+      .then((res: PricingResponse) => {
+        console.log("✅ fetchPricing FULL RESPONSE:", res);
+        console.log("Total:", res.total_price);
+        console.log("Breakdown:", res.breakdown);
+        const enrichedBreakdown: EnrichedBreakdownItem[] = res.breakdown.map(
+          (item: PriceBreakdownItem) => {
+            let label = item.label;
+            if (label === "Package price" && pkgItem) {
+              label = `${pkgItem.title}`;
+            } else if (label === "Extras" && selectedExtras.length > 0) {
+              const extraNames = selectedExtras
+                .map((e: SelectedExtra) => {
+                  const extra = availableExtras.find(
+                    (ex: Extra) => ex.id === e.extra_id,
+                  );
+                  return extra ? extra.title : `Extra #${e.extra_id}`;
+                })
+                .join(" + ");
+              label = `Extras: ${extraNames}`;
+            } else if (
+              primarySpace &&
+              (label.includes("–") ||
+                label.match(/^\\d{2}:\\d{2}–\\d{2}:\\d{2}/))
+            ) {
+              label = `${primarySpace.title}: ${label}`;
+            }
+            return { label, amount: item.amount };
+          },
+        );
         setPreview({ total: res.total_price, breakdown: enrichedBreakdown });
-        setPriceBreakdown(enrichedBreakdown, res.total_price);
+        setPriceBreakdown(
+          enrichedBreakdown as PriceBreakdownItem[],
+          res.total_price,
+        );
+        console.groupEnd();
       })
-      .catch(() => {
-        /* silent */
+      .catch((error) => {
+        console.error("❌ fetchPricing ERROR:", error);
+        console.groupEnd();
       });
   }, [
     selectedExtras,
     availableExtras,
-    selectedSpace,
-    selectedPackage,
+    primarySpace,
+    pkgItem,
     spaceId,
     selectedDate,
     selectedStartTime,
@@ -162,7 +230,14 @@ export function Step3Addons() {
               <button
                 className={`sb-btn ${isSelected(extra.id) ? "sb-btn--danger" : "sb-btn--secondary"}`}
                 disabled={!extra.is_available}
-                onClick={() => toggleExtra(extra.id)}
+                onClick={() => {
+                  console.group("🔄 STEP3 Toggle Extra");
+                  console.log("Toggling extra ID:", extra.id);
+                  console.log("Current selectedExtras:", selectedExtras);
+                  toggleExtra(extra.id);
+                  console.log("After toggle - should trigger pricing refetch");
+                  console.groupEnd();
+                }}
               >
                 {isSelected(extra.id) ? "Remove" : "Add"}
               </button>

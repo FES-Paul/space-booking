@@ -45,15 +45,21 @@ final class PricingController extends WP_REST_Controller
 		$end_time = (string) $request->get_param('end_time');
 		$extras = (array) ($request->get_param('extras') ?? []);
 
+		error_log("SB_DEBUG_PRICING: Request for space_id=$space_id, package_id=" . ($package_id ?? 'none') . ", date=$date, time=$start_time-$end_time");
+		error_log('SB_DEBUG_PRICING: Extras count: ' . count($extras));
+
 		// Guard: space exists
 		$post = get_post($space_id);
 		if (!$post || $post->post_type !== 'sb_space' || $post->post_status !== 'publish') {
+			error_log("SB_DEBUG_PRICING: Invalid space $space_id");
 			return new WP_REST_Response(['message' => 'Invalid space.'], 422);
 		}
 
 		$price = $this->pricing->calculate(
 			$space_id, $date, $start_time, $end_time, $extras, $package_id
 		);
+
+		error_log('SB_DEBUG_PRICING: Calculated total: ' . $price['total_price'] . ', breakdown count: ' . count($price['breakdown']));
 
 		return new WP_REST_Response([
 			'total_price' => $price['total_price'],

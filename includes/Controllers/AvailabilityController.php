@@ -129,9 +129,16 @@ final class AvailabilityController extends WP_REST_Controller
 		$start_time = $request->get_param('start_time');
 		$end_time = $request->get_param('end_time');
 
+		error_log("SB_DEBUG_EXTRAS: Fetching extras for Space ID: $space_id, Date: $date, Time: $start_time-$end_time");
+
 		$extras = $this->inventory->get_available_extras(
 			$space_id, $date, $start_time, $end_time
 		);
+
+		error_log('SB_DEBUG_EXTRAS: Found ' . count($extras) . " extras for space $space_id");
+		foreach ($extras as $extra) {
+			error_log('SB_DEBUG_EXTRAS: Extra ID ' . $extra['id'] . ' available: ' . ($extra['is_available'] ? 'yes' : 'no') . ' qty: ' . $extra['available_qty']);
+		}
 
 		return rest_ensure_response($extras);
 	}
