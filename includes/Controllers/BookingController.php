@@ -90,6 +90,7 @@ final class BookingController extends WP_REST_Controller
 		$phone = sanitize_text_field($request->get_param('customer_phone') ?? '');
 		$notes = sanitize_textarea_field($request->get_param('notes') ?? '');
 		$marketing_source = sanitize_text_field($request->get_param('marketing_source') ?? '');
+		$frontend_breakdown = $request->get_param('price_breakdown') ?: [];
 		$selected_item_ids = array_map('intval', (array) $request->get_param('selected_item_ids'));
 		if (empty($selected_item_ids)) {
 			return new WP_REST_Response(['message' => 'Missing selected_item_ids.'], 422);
@@ -140,9 +141,48 @@ final class BookingController extends WP_REST_Controller
 			$space_id, $date, $start_time, $end_time, $extras, $package_id
 		);
 
+		// ── Validate frontend breakdown ──────────────────────────────────────
+		$frontend_sum = 0.0;
+		foreach ($frontend_breakdown as $item) {
+			$frontend_sum += (float) ($item['amount'] ?? 0);
+		}
+		$calculated_total = $price['total_price'];
+		if (abs($frontend_sum - $calculated_total) > 0.01) {
+			error_log(sprintf(
+				'SpaceBooking: Frontend breakdown sum mismatch for booking #%d: frontend=%.2f, backend=%.2f',
+				$booking_id ?? 'unknown', $frontend_sum, $calculated_total
+			));
+			update_post_meta($booking_id, '_sb_breakdown_mismatch', [
+				'frontend_sum' => $frontend_sum,
+				'backend_total' => $calculated_total,
+				'frontend_breakdown' => $frontend_breakdown,
+			]);
+			$frontend_breakdown = [];  // Fallback to raw
+		} else {
+			update_post_meta($booking_id, '_sb_price_breakdown_enriched', $frontend_breakdown);
+			error_log(sprintf('SpaceBooking: Validated enriched breakdown saved for booking #%d', $booking_id));
+		}
+
+		// ── Validate frontend breakdown ──────────────────────────────────────
+		$frontend_sum = 0.0;
+		foreach ($frontend_breakdown as $item) {
+			$frontend_sum += (float) ($item['amount'] ?? 0);
+		}
+		$calculated_total = $price['total_price'];
+		if (abs($frontend_sum - $calculated_total) > 0.01) {
+			error_log(sprintf(
+				'SpaceBooking: Frontend breakdown sum mismatch: frontend=%.2f, backend=%.2f',
+				$frontend_sum, $calculated_total
+			));
+			$frontend_breakdown = [];  // Fallback to raw
+		}
+
 		// ── Persist pending booking ───────────────────────────────────────────
 		try {
 			$booking_id = $this->repo->create($data);
+			if ($frontend_breakdown) {
+				update_post_meta($booking_id, '_sb_price_breakdown_enriched', $frontend_breakdown);
+			}
 		} catch (\RuntimeException $e) {
 			return new WP_REST_Response(['message' => 'Could not save booking.'], 500);
 		}
@@ -173,7 +213,9 @@ final class BookingController extends WP_REST_Controller
 				'customer_email' => $email,
 				'extras' => $extras,
 				'breakdown' => $price['breakdown'],
+				'frontend_breakdown' => $frontend_breakdown,
 			], $price['total_price'], $booking_id);
+
 			$cart_added = true;
 			error_log('SpaceBooking: Booking #' . $booking_id . ' added to cart directly');
 		} catch (\RuntimeException $e) {
@@ -246,6 +288,7 @@ final class BookingController extends WP_REST_Controller
 			'marketing_source' => ['required' => false, 'sanitize_callback' => 'sanitize_text_field'],
 			'notes' => ['required' => false, 'sanitize_callback' => 'sanitize_textarea_field'],
 			'extras' => ['required' => false, 'default' => []],
+			'price_breakdown' => ['required' => false, 'default' => []],
 			'selected_item_ids' => [
 				'required' => true,
 				'type' => 'array',

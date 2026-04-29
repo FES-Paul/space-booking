@@ -67,6 +67,7 @@ export function Step6Payment() {
         customer_phone: String(customerInfo.phone || ""),
         notes: String(customerInfo.notes || ""),
         extras: selectedExtras,
+        price_breakdown: priceBreakdown,
       });
 
       // Preserve enriched breakdown, update other checkout data

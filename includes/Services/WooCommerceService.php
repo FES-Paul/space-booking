@@ -21,6 +21,8 @@ final class WooCommerceService
      */
     public function add_booking_to_cart(array $booking_data, float $total_price, int $booking_id): string
     {
+        $frontend_breakdown = $booking_data['frontend_breakdown'] ?? [];
+
         if (!function_exists('WC') || !WC()) {
             throw new \RuntimeException('WooCommerce not initialized.');
         }
@@ -99,6 +101,7 @@ final class WooCommerceService
             'sb_customer_email' => $customer_email,
             'sb_extras' => wp_json_encode($extras),
             'sb_breakdown' => wp_json_encode($booking_data['breakdown'] ?? []),
+            'sb_price_breakdown_enriched' => wp_json_encode($booking_data['frontend_breakdown'] ?? []),
         ];
 
         // 2. Add MAIN product to cart
@@ -168,6 +171,9 @@ final class WooCommerceService
         if (isset($values['sb_booking_id'])) {
             $item->add_meta_data('sb_booking_id', $values['sb_booking_id']);
             error_log('SpaceBooking WC: Saved sb_booking_id=' . $values['sb_booking_id'] . ' to line item');
+        }
+        if (isset($values['sb_price_breakdown_enriched'])) {
+            $item->add_meta_data('sb_price_breakdown_enriched', $values['sb_price_breakdown_enriched']);
         }
     }
 

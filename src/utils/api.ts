@@ -3,6 +3,7 @@ import type {
   BookingCreateResponse,
   Extra,
   Package,
+  PriceBreakdownItem,
   PricingResponse,
   SelectedExtra,
   Space,
@@ -96,6 +97,7 @@ export const createBooking = (payload: {
   customer_phone?: string;
   notes?: string;
   extras?: SelectedExtra[];
+  price_breakdown?: PriceBreakdownItem[];
 }) =>
   apiFetch<BookingCreateResponse>("/bookings", {
     method: "POST",

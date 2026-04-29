@@ -32,6 +32,42 @@ final class WooCommerceIntegration
 
         // GUARANTEED order meta save after checkout processing
         add_action('woocommerce_checkout_update_order_meta', [self::class, 'save_booking_meta_guaranteed'], 10, 1);
+
+        // Admin display for enriched breakdown
+        add_action('woocommerce_admin_order_data_after_billing_address', [self::class, 'display_booking_breakdown']);
+    }
+
+    /**
+     * Display enriched price breakdown in WooCommerce order admin view
+     */
+    public static function display_booking_breakdown($order): void
+    {
+        $enriched_breakdown = $order->get_meta('_sb_price_breakdown_enriched');
+        if (!$enriched_breakdown || !is_array($enriched_breakdown)) {
+            return;
+        }
+
+        echo '<div class="sb-order-breakdown">';
+        echo '<h4 style="margin-bottom: 10px;">🧾 Space Booking Price Breakdown</h4>';
+        echo '<table class="wp-list-table widefat fixed striped" style="margin-bottom: 10px;">';
+        echo '<thead><tr><th>Item</th><th style="text-align: right;">Amount</th></tr></thead>';
+        echo '<tbody>';
+        $grand_total = 0.0;
+        foreach ($enriched_breakdown as $item) {
+            $amount = (float) ($item['amount'] ?? 0);
+            $grand_total += $amount;
+            $formatted_amount = wc_price($amount);
+            echo '<tr>';
+            echo '<td>' . esc_html($item['label'] ?? 'Unknown') . '</td>';
+            echo '<td style="text-align: right;">' . $formatted_amount . '</td>';
+            echo '</tr>';
+        }
+        echo '<tr style="font-weight: bold; border-top: 2px solid #999;">';
+        echo '<td>Total</td>';
+        echo '<td style="text-align: right;">' . wc_price($grand_total) . '</td>';
+        echo '</tr>';
+        echo '</tbody></table>';
+        echo '</div>';
     }
 
     /**
@@ -216,6 +252,8 @@ final class WooCommerceIntegration
             return;
         }
 
+        $enriched_breakdown = null;
+
         // Loop ALL line items (including fees, shipping, etc.)
         foreach ($order->get_items() as $item) {
             $booking_id = $item->get_meta('sb_booking_id', true);
@@ -223,8 +261,19 @@ final class WooCommerceIntegration
                 $order->update_meta_data('_sb_booking_id', $booking_id);
                 $order->save();
                 error_log('SpaceBooking WC: Saved from line item booking_id ' . $booking_id . ' to order #' . $order_id);
-                return;
+
+                $enriched = $item->get_meta('sb_price_breakdown_enriched', true);
+                if ($enriched) {
+                    $enriched_breakdown = $enriched;
+                }
+                break;
             }
+        }
+
+        if ($enriched_breakdown) {
+            $order->update_meta_data('_sb_price_breakdown_enriched', $enriched_breakdown);
+            $order->save();
+            error_log('SpaceBooking WC: Saved enriched breakdown to order #' . $order_id);
         }
 
         // Fallback: check order TAXABLE line item meta directly
