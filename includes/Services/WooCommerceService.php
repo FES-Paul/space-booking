@@ -21,7 +21,10 @@ final class WooCommerceService
      */
     public function add_booking_to_cart(array $booking_data, float $total_price, int $booking_id): string
     {
-        $frontend_breakdown = $booking_data['frontend_breakdown'] ?? [];
+        $items = $booking_data['items'] ?? [];
+        $extras_breakdown = $booking_data['extras_breakdown'] ?? [];
+        $extras = $booking_data['extras'] ?? [];
+        $selected_item_ids = $booking_data['selected_item_ids'] ?? [];
 
         if (!function_exists('WC') || !WC()) {
             throw new \RuntimeException('WooCommerce not initialized.');
@@ -31,21 +34,10 @@ final class WooCommerceService
             throw new \RuntimeException('WooCommerce cart not available.');
         }
 
-        $space_id = $booking_data['space_id'];
-        $space_title = get_the_title($space_id);
-        $package_id = $booking_data['package_id'] ?? null;
-        $package_title = $package_id ? get_the_title($package_id) : null;
-        $date = $booking_data['date'] ?? '';
-        $start = $booking_data['start_time'] ?? '';
-        $end = $booking_data['end_time'] ?? '';
-        $extras = $booking_data['extras'] ?? [];
-        $customer_name = $booking_data['customer_name'] ?? '';
-        $customer_email = $booking_data['customer_email'] ?? '';
-
-        error_log('SpaceBooking WC: Creating MULTIPLE products for booking #' . $booking_id . ' (' . count($extras) . ' extras)');
+        error_log('SpaceBooking WC: Creating ' . count($items) . ' item products + ' . count($extras) . ' extras for booking #' . $booking_id);
 
         // Helper to create consistent virtual product
-        $create_product = function ($name, $price) use ($booking_id) {
+        $create_product = function ($name, $price, $item_breakdown = [], $extra_id = 0) use ($booking_id) {
             $product = new WC_Product_Simple();
             $product->set_name($name);
             $product->set_regular_price($price);
@@ -57,85 +49,91 @@ final class WooCommerceService
             $product->set_stock_status('instock');
             $product->set_sold_individually(true);
             $product->save();
-            error_log('SpaceBooking WC: Created product ID ' . $product->get_id() . ' "' . $name . '" price $' . $price);
+
+            // Meta for breakdown
+            if (!empty($item_breakdown)) {
+                $product->add_meta_data('sb_item_breakdown', wp_json_encode($item_breakdown), true);
+            }
+
+            error_log('SpaceBooking WC: Created product ID ' . $product->get_id() . ' "' . $name . '" $' . $price);
             return $product;
         };
 
-        // 1. MAIN BOOKING PRODUCT (base price only, assumes breakdown[0] or calc from total-extras)
-        // For simplicity, use passed total_price for main (extras separate) - adjust if base needed
-        // Calculate base_price: total minus sum of extras
-        $base_price = $total_price;
-        foreach ($extras as $extra_data) {
-            $extra_id = (int) $extra_data['extra_id'];
-            $quantity = max(1, (int) ($extra_data['quantity'] ?? 1));
-            $extra_price = (float) get_post_meta($extra_id, '_sb_extra_price', true);
-            $base_price -= $extra_price * $quantity;
-        }
-        $base_price = max(0, $base_price);  // Ensure non-negative
-
-        $main_product = $create_product(
-            sprintf('Booking #%d - %s', $booking_id, $package_title ?: $space_title),
-            $base_price
-        );
-
-        // Simple summary description for main product
-        $summary_html = '<strong>Space Booking Service #' . $booking_id . '</strong>';
-        if ($date && $start && $end) {
-            $summary_html .= '<br><small>' . htmlspecialchars($package_title ?: $space_title) . ' | ' . $date . ' ' . $start . '–' . $end . '</small>';
-        }
-        $summary_html .= '<br><small>Customer: ' . htmlspecialchars($customer_name) . ' <' . htmlspecialchars($customer_email) . '></small>';
-        $main_product->set_description($summary_html);
-        $main_product->save();
-
-        // Clear cart
+        // Clear cart first
         WC()->cart->empty_cart();
 
         // Common meta for ALL items
         $common_meta = [
             'sb_booking_id' => $booking_id,
-            'sb_space_id' => $space_id,
+            'sb_lead_space_id' => $booking_data['space_id'],
+            'sb_selected_item_ids' => wp_json_encode($selected_item_ids),
             'sb_date' => $booking_data['date'],
             'sb_start_time' => $booking_data['start_time'],
             'sb_end_time' => $booking_data['end_time'],
-            'sb_customer_name' => $customer_name,
-            'sb_customer_email' => $customer_email,
+            'sb_customer_name' => $booking_data['customer_name'],
+            'sb_customer_email' => $booking_data['customer_email'],
             'sb_extras' => wp_json_encode($extras),
-            'sb_breakdown' => wp_json_encode($booking_data['breakdown'] ?? []),
-            'sb_price_breakdown_enriched' => wp_json_encode($booking_data['frontend_breakdown'] ?? []),
         ];
 
-        // 2. Add MAIN product to cart
-        wc_clear_notices();
-        $main_key = WC()->cart->add_to_cart($main_product->get_id(), 1, 0, [], $common_meta);
-        if (!$main_key) {
-            throw new \RuntimeException('Failed to add main booking product to cart.');
-        }
-        error_log('SpaceBooking WC: Main product added, key: ' . $main_key);
+        $added_count = 0;
 
-        // 3. Add EXTRA products (separate line items)
-        foreach ($extras as $extra_data) {
-            $extra_id = (int) $extra_data['extra_id'];
-            $quantity = max(1, (int) ($extra_data['quantity'] ?? 1));
-            $extra_title = get_the_title($extra_id);
-            $extra_price = (float) get_post_meta($extra_id, '_sb_extra_price', true);
-            $extra_total = $extra_price * $quantity;
+        // 1. Add ONE PRODUCT PER ITEM (spaces/packages)
+        foreach ($items as $item) {
+            $item_name = $item['title'] . ' Booking #' . $booking_id;
+            $item_product = $create_product($item_name, $item['subtotal'], $item['breakdown'], $item['id']);
 
-            $extra_product = $create_product(
-                sprintf('%s (x%d)', $extra_title, $quantity),
-                $extra_total
-            );
-            $extra_product->set_description('Booking extra #' . $booking_id);
-            $extra_product->save();
+            // Description w/ time
+            $desc = '<strong>' . $item['title'] . '</strong><br>';
+            $desc .= $booking_data['date'] . ' ' . $booking_data['start_time'] . '–' . $booking_data['end_time'];
+            if ($item['type'] === 'sb_space') {
+                $desc .= ' (' . $item['breakdown'][0]['label'] . ')';
+            }
+            $item_product->set_description($desc);
+            $item_product->save();
 
-            $extra_key = WC()->cart->add_to_cart($extra_product->get_id(), 1, 0, [], $common_meta);
-            if (!$extra_key) {
-                error_log('SpaceBooking WC: Warning - failed to add extra ' . $extra_id . ', continuing...');
-            } else {
-                error_log('SpaceBooking WC: Extra "' . $extra_title . '" added, key: ' . $extra_key);
+            wc_clear_notices();
+            $cart_key = WC()->cart->add_to_cart($item_product->get_id(), 1, 0, [], array_merge($common_meta, [
+                'sb_item_id' => $item['id'],
+                'sb_item_type' => $item['type'],
+                'sb_item_subtotal' => $item['subtotal']
+            ]));
+
+            if ($cart_key) {
+                $added_count++;
+                error_log('SpaceBooking WC: Item ' . $item['id'] . ' (' . $item['type'] . ') added, key: ' . $cart_key);
             }
         }
 
-        error_log('SpaceBooking WC: Booking #' . $booking_id . ' fully added (' . (1 + count($extras)) . ' items)');
+        // 2. Add EXTRA products (separate line items, use breakdown if available)
+        foreach ($extras_breakdown as $extra_item) {
+            // Match to extras data for ID/qty
+            $matched_extra = null;
+            foreach ($extras as $extra_data) {
+                if (strpos($extra_item['label'], get_the_title($extra_data['extra_id'])) !== false) {
+                    $matched_extra = $extra_data;
+                    break;
+                }
+            }
+
+            $extra_id = $matched_extra['extra_id'] ?? 0;
+            $extra_title = $extra_item['label'];
+            $extra_price = $extra_item['amount'];
+
+            $extra_product = $create_product($extra_title, $extra_price, [], $extra_id);
+            $extra_product->set_description('Booking extra #' . $booking_id . ' | Item: ' . $extra_id);
+            $extra_product->save();
+
+            $extra_key = WC()->cart->add_to_cart($extra_product->get_id(), 1, 0, [], array_merge($common_meta, [
+                'sb_extra_id' => $extra_id
+            ]));
+
+            if ($extra_key) {
+                $added_count++;
+                error_log('SpaceBooking WC: Extra "' . $extra_title . '" ($' . $extra_price . ') added');
+            }
+        }
+
+        error_log('SpaceBooking WC: Booking #' . $booking_id . ' fully added (' . $added_count . ' line items) | Cart total: ' . WC()->cart->get_cart_total());
 
         return wc_get_checkout_url();
     }

@@ -28,7 +28,7 @@ final class PricingController extends WP_REST_Controller
 	{
 		register_rest_route($this->namespace, '/' . $this->rest_base, [
 			[
-				'methods' => WP_REST_Server::CREATABLE,
+				'methods' => [WP_REST_Server::CREATABLE, WP_REST_Server::READABLE],
 				'callback' => [$this, 'calculate_pricing'],
 				'permission_callback' => '__return_true',
 				'args' => $this->get_args(),
@@ -38,40 +38,46 @@ final class PricingController extends WP_REST_Controller
 
 	public function calculate_pricing(WP_REST_Request $request): WP_REST_Response
 	{
-		$space_id = (int) $request->get_param('space_id');
+		$item_ids = array_map('absint', (array) $request->get_param('item_ids'));
+		$space_id = (int) $request->get_param('space_id') ?: $item_ids[0] ?? 0;
 		$package_id = $request->get_param('package_id') ? (int) $request->get_param('package_id') : null;
 		$date = (string) $request->get_param('date');
 		$start_time = (string) $request->get_param('start_time');
 		$end_time = (string) $request->get_param('end_time');
 		$extras = (array) ($request->get_param('extras') ?? []);
 
-		error_log("SB_DEBUG_PRICING: Request for space_id=$space_id, package_id=" . ($package_id ?? 'none') . ", date=$date, time=$start_time-$end_time");
+		error_log('SB_DEBUG_PRICING: FULL REQUEST PARAMS: ' . json_encode($request->get_params()));
+		error_log('SB_DEBUG_PRICING: Parsed item_ids=' . json_encode($item_ids) . ", space_id=$space_id, date=$date, time=$start_time-$end_time");
 		error_log('SB_DEBUG_PRICING: Extras count: ' . count($extras));
 
 		// Guard: space exists
 		$post = get_post($space_id);
-		if (!$post || $post->post_type !== 'sb_space' || $post->post_status !== 'publish') {
-			error_log("SB_DEBUG_PRICING: Invalid space $space_id");
+		if (!$post) {
+			error_log("SB_DEBUG_PRICING: No post for space $space_id");
+			return new WP_REST_Response(['message' => 'Invalid space ID.'], 422);
+		}
+		error_log('SB_DEBUG_PRICING: space_id=' . $space_id . ' post_type=' . $post->post_type . ', status=' . $post->post_status);
+		if ($post->post_type !== 'sb_space' || $post->post_status !== 'publish') {
+			error_log("SB_DEBUG_PRICING: Invalid space $space_id type=" . $post->post_type . ' status=' . $post->post_status);
 			return new WP_REST_Response(['message' => 'Invalid space.'], 422);
 		}
 
 		$price = $this->pricing->calculate(
-			$space_id, $date, $start_time, $end_time, $extras, $package_id
+			$space_id, $date, $start_time, $end_time, $extras, $item_ids, $package_id, $request->get_param('slot_id')
 		);
 
 		error_log('SB_DEBUG_PRICING: Calculated total: ' . $price['total_price'] . ', breakdown count: ' . count($price['breakdown']));
 
-		return new WP_REST_Response([
-			'total_price' => $price['total_price'],
-			'breakdown' => $price['breakdown'],
-			'duration_hours' => $price['duration_hours'],
-		], 200);
+		return new WP_REST_Response($price, 200);
 	}
 
 	private function get_args(): array
 	{
 		return [
-			'space_id' => ['required' => true, 'sanitize_callback' => 'absint'],
+			'space_id' => ['required' => false, 'sanitize_callback' => 'absint'],
+			'item_ids' => ['type' => 'array', 'sanitize_callback' => function ($input) {
+				return array_map('absint', (array) $input);
+			}],
 			'package_id' => ['required' => false, 'sanitize_callback' => 'absint'],
 			'date' => ['required' => true, 'sanitize_callback' => 'sanitize_text_field'],
 			'start_time' => ['required' => true, 'sanitize_callback' => 'sanitize_text_field'],

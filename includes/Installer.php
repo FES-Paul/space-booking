@@ -124,6 +124,7 @@ notes           TEXT            DEFAULT NULL,
 		add_option('sb_magic_link_ttl_minutes', '30');
 		add_option('sb_buffer_pre_minutes', 15);
 		add_option('sb_buffer_post_minutes', 15);
-		add_option('sb_booking_confirmation_tpl', '');
+		add_option('sb_confirmation_email_template', '<p>Dear [customer_name],</p><p>Thank you for your booking #[order_id]. Details:</p><ul><li>Space: [space_name]</li><li>Date/Time: [booking_date]</li><li>Total: [total_price]</li></ul>[price_breakdown]<p>Access instructions: [access_instructions]</p>');
 	}
+
 }

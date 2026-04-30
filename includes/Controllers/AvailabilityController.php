@@ -69,15 +69,10 @@ final class AvailabilityController extends WP_REST_Controller
 			],
 		]);
 
-		// Price preview
-		register_rest_route($this->namespace, '/pricing', [
-			[
-				'methods' => WP_REST_Server::READABLE,
-				'callback' => [$this, 'get_pricing'],
-				'permission_callback' => '__return_true',
-			],
-		]);
+		// No pricing route here (handled by PricingController)
 	}
+
+	// Removed duplicate /pricing route
 
 	// ── Handlers ─────────────────────────────────────────────────────────────
 
@@ -155,7 +150,7 @@ final class AvailabilityController extends WP_REST_Controller
 		$extras = is_array($extras_raw) ? $extras_raw : [];
 
 		$result = $this->pricing->calculate(
-			$space_id, $date, $start_time, $end_time, $extras, $package_id
+			$space_id, $date, $start_time, $end_time, $extras, [$space_id], $package_id
 		);
 
 		return rest_ensure_response($result);

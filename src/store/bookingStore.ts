@@ -465,38 +465,12 @@ export const useBookingStore = create<BookingState>()((set, get) => ({
     breakdown: PriceBreakdownItem[];
   }) => set({ checkoutUrl, bookingId, totalPrice, priceBreakdown: breakdown }),
 
-  setPriceBreakdown: (rawBreakdown: PriceBreakdownItem[], total: number) => {
+  setPriceBreakdown: (breakdown: PriceBreakdownItem[], total: number) => {
     console.group("💰 STORE setPriceBreakdown");
-    console.log("Raw breakdown:", rawBreakdown);
+    console.log("Breakdown:", breakdown);
     console.log("Total:", total);
     console.groupEnd();
-    const state = get();
-    const breakdown = rawBreakdown.map((item: PriceBreakdownItem) => {
-      let label = item.label;
-      const pkgItem = state.selectedItems.find((i) => i.type === "package");
-      if (label === "Package price" && pkgItem) {
-        label = `${pkgItem.title}`;
-      } else if (label === "Extras" && state.selectedExtras.length > 0) {
-        const extraNames = state.selectedExtras
-          .map((e: SelectedExtra) => {
-            const extra = state.availableExtras.find(
-              (ex: Extra) => ex.id === e.extra_id,
-            );
-            return extra ? extra.title : `Extra #${e.extra_id}`;
-          })
-          .join(" + ");
-        label = `Extras: ${extraNames}`;
-      } else if (
-        state.selectedItems.some((i) => i.type === "space") &&
-        (label.includes("–") || label.match(/^\\d{2}:\\d{2}–\\d{2}:\\d{2}/))
-      ) {
-        const primarySpace = state.selectedItems.find(
-          (i) => i.type === "space",
-        ) as Space;
-        label = `${primarySpace.title}: ${label}`;
-      }
-      return { ...item, label };
-    });
+    // Backend provides detailed labels, no enrichment needed
     set({ priceBreakdown: breakdown, totalPrice: total });
   },
 

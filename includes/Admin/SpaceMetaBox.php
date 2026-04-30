@@ -289,7 +289,7 @@ final class SpaceMetaBox
                     placeholder="" value="<?php echo esc_attr($slot['override_price'] ?? ''); ?>" style="width:100px;">
                 <input type="number" name="sb_fixed_slots[<?php echo $i; ?>][capacity]" min="1"
                     value="<?php echo esc_attr($slot['capacity'] ?? 1); ?>" style="width:70px;">
-                <button type="button" class="button-link sb-remove-slot" style="color:#d63638;">×</button>
+                <button type="button" class="button-link sb-remove-slot" style="color:#d63638;width:10px;">×</button>
             </div>
             <?php endforeach; ?>
         </div>

@@ -260,8 +260,12 @@ final class Plugin
         (new ExtraMetaBox())->register();
         (new PackageMetaBox())->register();
 
+        (new \SpaceBooking\Admin\WooCommerceOrderActions())->register();
+        (new \SpaceBooking\Admin\SettingsCommunicationTab())->register();
+
         // Export/Import AJAX
         add_action('wp_ajax_sb_export_data', [$this, 'ajax_export_data']);
+
         add_action('wp_ajax_sb_import_data', [$this, 'ajax_import_data']);
 
         // Customer Fields AJAX

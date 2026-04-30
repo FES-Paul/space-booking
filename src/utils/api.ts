@@ -64,18 +64,22 @@ export const fetchExtras = (
 
 export const fetchPricing = (params: {
   space_id: number;
+  item_ids: number[];
   date: string;
   start_time: string;
   end_time: string;
   extras?: SelectedExtra[];
   package_id?: number;
+  slot_id?: string;
 }) => {
   const qs = new URLSearchParams();
   qs.set("space_id", String(params.space_id));
+  params.item_ids.forEach((id) => qs.append("item_ids[]", String(id)));
   qs.set("date", params.date);
   qs.set("start_time", params.start_time);
   qs.set("end_time", params.end_time);
   if (params.package_id) qs.set("package_id", String(params.package_id));
+  if (params.slot_id) qs.set("slot_id", params.slot_id);
   (params.extras ?? []).forEach((e, i) => {
     qs.set(`extras[${i}][extra_id]`, String(e.extra_id));
     qs.set(`extras[${i}][quantity]`, String(e.quantity));

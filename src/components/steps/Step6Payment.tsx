@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { useBookingStore } from "@/store/bookingStore";
-import { createBooking, checkCartHasBooking } from "@/utils/api";
+import { createBooking, checkCartHasBooking, fetchPricing } from "@/utils/api";
 
 export function Step6Payment() {
   const {
     checkoutUrl,
+    getPrimarySpaceId,
+
     priceBreakdown,
     totalPrice,
     selectedDate,
@@ -22,6 +24,36 @@ export function Step6Payment() {
   const [loading, setLoading] = useState(false);
   const [checkingCart, setCheckingCart] = useState(true);
   const [error, setError] = useState("");
+
+  // Refetch fresh pricing on Step6 mount (ensure up-to-date breakdown)
+  useEffect(() => {
+    const refreshPricing = async () => {
+      const spaceId = getPrimarySpaceId();
+      if (!spaceId || !selectedDate || !selectedStartTime || !selectedEndTime)
+        return;
+
+      const pricingParams = {
+        space_id: spaceId,
+        item_ids: selectedItems.map((i) => i.id),
+        date: selectedDate,
+        start_time: selectedStartTime,
+        end_time: selectedEndTime,
+        extras: selectedExtras,
+        package_id: selectedItems.find((i) => i.type === "package")?.id,
+      };
+
+      try {
+        const res = await fetchPricing(pricingParams);
+        useBookingStore
+          .getState()
+          .setPriceBreakdown(res.breakdown, res.total_price);
+      } catch (e) {
+        console.error("Step6 pricing refresh failed:", e);
+      }
+    };
+
+    refreshPricing();
+  }, []); // Run once on mount
 
   const handlePayment = async () => {
     // If existing checkout or cart booking, redirect immediately
@@ -70,15 +102,13 @@ export function Step6Payment() {
         price_breakdown: priceBreakdown,
       });
 
-      // Preserve enriched breakdown, update other checkout data
       useBookingStore.getState().setCheckoutData({
         checkoutUrl: res.checkout_url,
         bookingId: res.booking_id,
         totalPrice: res.total_price,
-        breakdown: priceBreakdown, // Keep frontend enriched breakdown
+        breakdown: res.breakdown || priceBreakdown,
       });
 
-      // Redirect to WooCommerce checkout for payment
       window.location.href = res.checkout_url;
     } catch (e) {
       setError((e as Error).message);

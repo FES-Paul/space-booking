@@ -35,6 +35,41 @@ final class WooCommerceIntegration
 
         // Admin display for enriched breakdown
         add_action('woocommerce_admin_order_data_after_billing_address', [self::class, 'display_booking_breakdown']);
+
+        // Custom order action - DISABLED to avoid duplicate with WooCommerceOrderActions.php
+        // add_filter('woocommerce_order_actions', [self::class, 'add_confirmation_action'], 10, 2);
+        // add_action('woocommerce_order_action_send_sb_confirmation_email', [self::class, 'handle_confirmation_action'], 10, 1);
+    }
+
+    public static function add_confirmation_action($actions, $order)
+    {
+        if (!$order instanceof \WC_Order) {
+            return $actions;
+        }
+
+        $booking_id = $order->get_meta('_sb_booking_id');
+        if (!$booking_id) {
+            return $actions;
+        }
+
+        $actions['send_sb_confirmation_email'] = 'Send Booking Confirmation Email';
+        return $actions;
+    }
+
+    public static function handle_confirmation_action($order)
+    {
+        if (!$order instanceof \WC_Order) {
+            return;
+        }
+
+        $booking_id = $order->get_meta('_sb_booking_id');
+        if (!$booking_id) {
+            $order->add_order_note('ERROR: No booking ID found.', 1);
+            return;
+        }
+
+        $email_service = new \SpaceBooking\Services\EmailService();
+        $email_service->send_confirmation_email($order->get_id());
     }
 
     /**

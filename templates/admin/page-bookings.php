@@ -241,25 +241,27 @@ defined('ABSPATH') || exit;
                                 $edit_url = admin_url('admin.php?page=space-booking-bookings&edit=' . $b['id']);
                                 echo '<a href="' . esc_url($edit_url) . '" class="sb-booking" style="text-decoration:none; color:inherit; display:block;">';
                                 echo esc_html($time . ' - ' . $b['customer_name']);
-                                <?php $marketing = $wpdb->get_var($wpdb->prepare("SELECT meta_value FROM {$wpdb->prefix}sb_booking_meta WHERE booking_id = %d AND meta_key = '_sb_marketing_source'", $b['id'])); ?>
-            <?php if ($marketing): ?>
+                                ?>
+            <?php
+            $marketing = $wpdb->get_var($wpdb->prepare("SELECT meta_value FROM {$wpdb->prefix}sb_booking_meta WHERE booking_id = %d AND meta_key = '_sb_marketing_source'", $b['id']));
+            if ($marketing):
+                ?>
             <br><small style="opacity:0.7;">📈 <?php echo esc_html($marketing); ?></small>
             <?php endif; ?>
-            echo ' <span class="sb-status sb-status--' . esc_attr($b['status']) . '">' . str_replace('_', ' ',
-                esc_html(ucfirst($b['status']))) . '</span>';
-            echo '</a>';
-
+            <?php
+                                echo ' <span class="sb-status sb-status--' . esc_attr($b['status']) . '">' . str_replace('_', ' ', esc_html(ucfirst($b['status']))) . '</span>';
+                                echo '</a>';
+                            }
+                        }
+                        echo '</div>';  // Close sb-day-cell
+                    }
+                    echo '</div>';  // Close sb-calendar-grid
+                }
+                echo '</section>';
             }
-            }
-            echo '
-        </div>';
-        }
-        echo '
-    </div>';
-    echo '</section>';
-    }
-    }
-    ?>
+            ?>
+        </div> <!-- Close sb-calendar-grouped -->
+    </div> <!-- Close tab-content -->
 </div>
 </div>
 

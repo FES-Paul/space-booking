@@ -93,6 +93,16 @@ final class AdminMenu
 			[$this, 'page_tools']
 		);
 
+		// Communication
+		add_submenu_page(
+			'space-booking',
+			__('Communication', 'space-booking'),
+			__('Communication', 'space-booking'),
+			'manage_options',
+			'space-booking-communication',
+			[$this, 'page_communication']
+		);
+
 		// Settings
 		add_submenu_page(
 			'space-booking',
@@ -102,6 +112,16 @@ final class AdminMenu
 			'space-booking-settings',
 			[$this, 'page_settings']
 		);
+	}
+
+	public function page_communication(): void
+	{
+		?>
+<div class="wrap">
+    <h1><?php esc_html_e('Communication Settings', 'space-booking'); ?></h1>
+    <?php do_settings_sections('space-booking-communication'); ?>
+</div>
+<?php
 	}
 
 	// ── Settings API ─────────────────────────────────────────────────────────
@@ -122,6 +142,7 @@ final class AdminMenu
 			'sb_email_from_name' => 'sanitize_text_field',
 			'sb_magic_link_ttl_minutes' => 'absint',
 			'sb_booking_policy' => 'wp_kses_post',
+			'sb_confirmation_email_template' => 'wp_kses_post',
 		];
 
 		foreach ($settings as $key => $callback) {
@@ -151,7 +172,7 @@ final class AdminMenu
 		\t ORDER BY b.created_at DESC LIMIT 10",
 			ARRAY_A
 		);
-		?>
+?>
 <div class="wrap">
     <h1><?php esc_html_e('Space Booking Dashboard', 'space-booking'); ?></h1>
 

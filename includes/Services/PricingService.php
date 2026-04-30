@@ -34,106 +34,159 @@ final class PricingService
 		string $start_time,
 		string $end_time,
 		array $extras = [],
+		?array $item_ids = null,
 		?int $package_id = null,
 		?string $slot_id = null
 	): array {
 		$duration_hours = $this->hours_between($start_time, $end_time);
 
-		// ── Fixed slot override price (highest priority)
-		if ($slot_id) {
-			$fixed_slots = get_post_meta($space_id, '_sb_fixed_slots', true);
-			if (is_array($fixed_slots)) {
-				foreach ($fixed_slots as $slot) {
-					if ($slot['slot_id'] === $slot_id) {
-						$slot_price = $slot['override_price'] ?? null;
-						if ($slot_price !== null) {
-							$extras_price = $this->calculate_extras($extras);
-							$total = $slot_price + $extras_price;
-							return [
-								'base_price' => $slot_price,
-								'modifier_price' => 0.0,
-								'extras_price' => $extras_price,
-								'total_price' => $total,
-								'duration_hours' => $duration_hours,
-								'display_duration' => round($duration_hours, 1),
-								'breakdown' => [
-									['label' => 'Fixed slot price', 'amount' => $slot_price],
-									['label' => 'Extras', 'amount' => $extras_price],
-									['label' => 'Duration', 'amount' => 0, 'info' => sprintf('%.1fh', $duration_hours)],
-								],
-							];
+		$running_total = 0.0;
+		$enriched_breakdown = [];
+		$item_details = [];  // NEW: per-item tracking
+		$total_duration = 0.0;
+
+		error_log('SB_PRICING: Starting validation for item_ids=' . json_encode($item_ids) . ', space_id=' . $space_id);
+		$item_ids = $item_ids ?? [$space_id];
+		if (!is_array($item_ids)) {
+			error_log('SB_PRICING: Invalid item_ids type, fallback to space_id=' . $space_id);
+			$item_ids = [$space_id];
+		}
+
+		// Validate all item_ids exist and are valid posts
+		$valid_ids = [];
+		foreach ($item_ids as $id) {
+			$post = get_post($id);
+			if ($post) {
+				error_log('SB_PRICING: ID ' . $id . ' post_type=' . $post->post_type . ', status=' . $post->post_status);
+				if (in_array($post->post_type, ['sb_space', 'sb_package']) && $post->post_status === 'publish') {
+					$valid_ids[] = $id;
+				} else {
+					error_log('SB_PRICING: Invalid item_id ' . $id . ' (type=' . $post->post_type . ', status=' . $post->post_status . '), skipping');
+				}
+			} else {
+				error_log('SB_PRICING: No post found for item_id ' . $id . ', skipping');
+			}
+		}
+		error_log('SB_PRICING: Valid IDs after validation: ' . json_encode($valid_ids) . ', final item_ids=' . json_encode($item_ids = $valid_ids ?: [$space_id]));
+
+		foreach ($item_ids as $item_id) {
+			$item_type = get_post_type($item_id);
+			$item_title = get_the_title($item_id);
+			$item_subtotal = 0.0;
+			$item_breakdown = [];  // Item-specific breakdown
+
+			if ($item_type === 'sb_package') {
+				$package_price = (float) get_post_meta($item_id, '_sb_package_price', true);
+				$item_subtotal += $package_price;
+				$item_breakdown[] = [
+					'label' => $item_title,
+					'amount' => $package_price,
+				];
+			} else if ($item_type === 'sb_space') {
+				$item_duration = $duration_hours;
+				$total_duration += $item_duration;
+				$fixed_key = '_sb_fixed_price_' . round($item_duration) . 'hours';
+				$fixed_price = (float) get_post_meta($item_id, $fixed_key, true);
+				$segments = $this->get_price_segments($item_id, $date, $start_time, $end_time);
+				if (!empty($segments)) {
+					$base_price = 0.0;
+					foreach ($segments as $seg) {
+						$seg_hours = ($seg['end_min'] - $seg['start_min']) / 60.0;
+						$seg_price = round($seg['rate'] * $seg_hours, 2);
+						$base_price += $seg_price;
+						$item_breakdown[] = [
+							'label' => sprintf('%s (%s)', $item_title, $seg['start_time'] . '–' . $seg['end_time']),
+							'amount' => $seg_price,
+						];
+					}
+					$item_subtotal += $base_price;
+				} else {
+					$base_rate = $fixed_price ?: (float) get_post_meta($item_id, '_sb_hourly_rate', true);
+					$item_base = $base_rate * $item_duration;
+					$item_subtotal += $item_base;
+					$item_breakdown[] = [
+						'label' => sprintf('%s (%.1fh)', $item_title, $item_duration),
+						'amount' => $item_base,
+					];
+				}
+
+				// Slot override for this item
+				if ($slot_id) {
+					$fixed_slots = get_post_meta($item_id, '_sb_fixed_slots', true);
+					if (is_array($fixed_slots)) {
+						foreach ($fixed_slots as $slot) {
+							if ($slot['slot_id'] === $slot_id) {
+								$slot_price = $slot['override_price'] ?? null;
+								if ($slot_price !== null) {
+									$item_subtotal = $slot_price;
+									$item_breakdown = [['label' => $item_title . ' Fixed Slot', 'amount' => $slot_price]];
+									break;
+								}
+							}
 						}
-						break;
 					}
 				}
 			}
-		}
 
-		// ── Package shortcut ──────────────────────────────────────────────────
-		if ($package_id) {
-			$package_price = (float) get_post_meta($package_id, '_sb_package_price', true);
-			$extras_price = $this->calculate_extras($extras);
-			$total = $package_price + $extras_price;
+			// Stackable modifiers per item (remove priority skip)
+			[$modifier_price, $mod_breakdown] = $this->apply_modifiers($item_id, $date, $start_time, $end_time, $item_subtotal);
+			$item_subtotal += $modifier_price;
+			$item_breakdown = array_merge($item_breakdown, $mod_breakdown);  // Include in item breakdown
 
-			$display_duration = $duration_hours;
-			return [
-				'base_price' => $package_price,
-				'modifier_price' => 0.0,
-				'extras_price' => $extras_price,
-				'total_price' => $total,
-				'duration_hours' => $duration_hours,
-				'display_duration' => round($display_duration, 1),
-				'breakdown' => [
-					['label' => 'Package price', 'amount' => $package_price],
-					['label' => 'Extras', 'amount' => $extras_price],
-					['label' => 'Total booking time', 'amount' => 0, 'info' => sprintf('%.1fh', $display_duration)],
-				],
+			// Store per-item detail
+			$item_details[] = [
+				'id' => $item_id,
+				'type' => $item_type,
+				'title' => $item_title,
+				'subtotal' => round($item_subtotal, 2),
+				'breakdown' => $item_breakdown
 			];
+
+			$running_total += $item_subtotal;
+			$enriched_breakdown = array_merge($enriched_breakdown, $item_breakdown);
 		}
-
-		// ── Price override segments ────────────────────────────────────────────
-		$segments = $this->get_price_segments($space_id, $date, $start_time, $end_time);
-
-		$base_price = 0.0;
-		$base_breakdown = [];
-		foreach ($segments as $seg) {
-			$seg_hours = ($seg['end_min'] - $seg['start_min']) / 60.0;
-			$seg_price = round($seg['rate'] * $seg_hours, 2);
-			$base_price += $seg_price;
-			$symbol = \SpaceBooking\Services\CurrencyService::get_symbol();
-			$base_breakdown[] = [
-				'label' => sprintf('%s–%s (%.1fh × %s%.2f)',
-					substr($seg['start_time'], 0, 5),
-					substr($seg['end_time'], 0, 5),
-					$seg_hours, $symbol, $seg['rate']),
-				'amount' => $seg_price
-			];
-		}
-
-		// Apply temporal modifiers (to total base)
-		[$modifier_price, $breakdown_modifiers] = $this->apply_modifiers(
-			$space_id, $date, $start_time, $end_time, $base_price
-		);
 
 		$display_duration = $duration_hours;
 		$extras_price = $this->calculate_extras($extras);
-		$total = $base_price + $modifier_price + $extras_price;
+		$total = $running_total + $extras_price;
 
-		$breakdown = array_merge(
-			$base_breakdown,
-			$breakdown_modifiers,
-			($extras_price > 0 ? [['label' => 'Extras', 'amount' => $extras_price]] : [])
-		);
+		$breakdown = $enriched_breakdown;
+		$extras_breakdown = [];
+		if ($extras_price > 0) {
+			// NEW: Detailed extras breakdown
+			$extras_breakdown = $this->get_extras_breakdown($extras);
+			$breakdown = array_merge($breakdown, $extras_breakdown);
+		}
 
 		return [
-			'base_price' => $base_price,
-			'modifier_price' => $modifier_price,
+			'base_price' => $running_total,
 			'extras_price' => $extras_price,
 			'total_price' => round($total, 2),
 			'duration_hours' => $duration_hours,
 			'display_duration' => round($display_duration, 1),
-			'breakdown' => $breakdown,
+			'breakdown' => $breakdown,  // Backward compat: aggregated
+			'items' => $item_details,  // NEW: Per-item for WC
+			'extras_breakdown' => $extras_breakdown  // NEW: Detailed extras
 		];
+	}
+
+	private function get_extras_breakdown(array $extras): array
+	{
+		$breakdown = [];
+		$group_names = [];
+		foreach ($extras as $extra) {
+			$extra_id = (int) $extra['extra_id'];
+			$qty = max(1, (int) ($extra['quantity'] ?? 1));
+			$price = (float) get_post_meta($extra_id, '_sb_extra_price', true);
+			$title = get_the_title($extra_id);
+			$total = $price * $qty;
+			$breakdown[] = [
+				'label' => $title . ($qty > 1 ? ' (x' . $qty . ')' : ''),
+				'amount' => $total
+			];
+			$group_names[] = $title . ($qty > 1 ? ' x' . $qty : '');
+		}
+		return $breakdown;
 	}
 
 	// ── Temporal modifiers ───────────────────────────────────────────────────

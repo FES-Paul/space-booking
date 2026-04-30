@@ -110,6 +110,7 @@ export function Step3Addons() {
     console.group("💰 STEP3 fetchPricing");
     const pricingParams = {
       space_id: spaceId,
+      item_ids: selectedItems.map((i: SelectionItem) => i.id),
       date: selectedDate,
       start_time: selectedStartTime,
       end_time: selectedEndTime,
@@ -123,36 +124,10 @@ export function Step3Addons() {
         console.log("✅ fetchPricing FULL RESPONSE:", res);
         console.log("Total:", res.total_price);
         console.log("Breakdown:", res.breakdown);
-        const enrichedBreakdown: EnrichedBreakdownItem[] = res.breakdown.map(
-          (item: PriceBreakdownItem) => {
-            let label = item.label;
-            if (label === "Package price" && pkgItem) {
-              label = `${pkgItem.title}`;
-            } else if (label === "Extras" && selectedExtras.length > 0) {
-              const extraNames = selectedExtras
-                .map((e: SelectedExtra) => {
-                  const extra = availableExtras.find(
-                    (ex: Extra) => ex.id === e.extra_id,
-                  );
-                  return extra ? extra.title : `Extra #${e.extra_id}`;
-                })
-                .join(" + ");
-              label = `Extras: ${extraNames}`;
-            } else if (
-              primarySpace &&
-              (label.includes("–") ||
-                label.match(/^\\d{2}:\\d{2}–\\d{2}:\\d{2}/))
-            ) {
-              label = `${primarySpace.title}: ${label}`;
-            }
-            return { label, amount: item.amount };
-          },
-        );
-        setPreview({ total: res.total_price, breakdown: enrichedBreakdown });
-        setPriceBreakdown(
-          enrichedBreakdown as PriceBreakdownItem[],
-          res.total_price,
-        );
+        // Backend now provides detailed labels, no frontend enrichment needed
+        setPreview({ total: res.total_price, breakdown: res.breakdown });
+        setPriceBreakdown(res.breakdown, res.total_price);
+
         console.groupEnd();
       })
       .catch((error) => {

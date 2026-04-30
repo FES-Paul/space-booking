@@ -117,11 +117,13 @@ final class BookingController extends WP_REST_Controller
 			return new WP_REST_Response(['message' => 'Invalid space.'], 422);
 		}
 
-		// ── Guard: time window still available ───────────────────────────────
-		$booked = $this->repo->get_confirmed_intervals($space_id, $date);
+		// ── Guard: time window still available (check ALL selected spaces) ──
+		$avail = new \SpaceBooking\Services\AvailabilityService();
+		$footprint_spaces = $avail->get_conflict_groups($selected_item_ids);
+		$booked = $this->repo->get_confirmed_intervals_for_spaces($footprint_spaces, $date);
 		foreach ($booked as $b) {
 			if ($start_time < $b['end'] && $end_time > $b['start']) {
-				return new WP_REST_Response(['message' => 'Selected time is no longer available.'], 409);
+				return new WP_REST_Response(['message' => 'Selected time is no longer available for one or more spaces.'], 409);
 			}
 		}
 
@@ -136,9 +138,9 @@ final class BookingController extends WP_REST_Controller
 			}
 		}
 
-		// ── Calculate price ───────────────────────────────────────────────────
+		// ── Calculate price USING ALL selected_item_ids ──────────────────────
 		$price = $this->pricing->calculate(
-			$space_id, $date, $start_time, $end_time, $extras, $package_id
+			$lead_space_id, $date, $start_time, $end_time, $extras, $selected_item_ids, $package_id, null
 		);
 
 		// ── Validate frontend breakdown ──────────────────────────────────────
@@ -177,10 +179,14 @@ final class BookingController extends WP_REST_Controller
 			$frontend_breakdown = [];  // Fallback to raw
 		}
 
-		// ── Persist pending booking ───────────────────────────────────────────
+		// ── Persist pending booking + selected_items meta ────────────────────
 		try {
 			$booking_id = $this->repo->create($data);
-			if ($frontend_breakdown) {
+			// Save selected_item_ids for WC multi-item
+			$this->repo->save_meta($booking_id, '_sb_selected_item_ids', wp_json_encode($selected_item_ids));
+			// Backend breakdown
+			update_post_meta($booking_id, '_sb_price_breakdown', wp_json_encode($price['breakdown']));
+			if ($frontend_breakdown && $price['breakdown']) {
 				update_post_meta($booking_id, '_sb_price_breakdown_enriched', $frontend_breakdown);
 			}
 		} catch (\RuntimeException $e) {
@@ -200,56 +206,58 @@ final class BookingController extends WP_REST_Controller
 		}
 
 		// ── Add to WooCommerce cart or session ────────────────────────────────
-		$checkout_url = wc_get_cart_url();  // Default to cart
+		$checkout_url = wc_get_cart_url();
 		$cart_added = false;
 		try {
 			$checkout_url = $this->wc->add_booking_to_cart([
 				'space_id' => $space_id,
 				'package_id' => $package_id,
+				'selected_item_ids' => $selected_item_ids,
 				'date' => $date,
 				'start_time' => $start_time,
 				'end_time' => $end_time,
 				'customer_name' => $name,
 				'customer_email' => $email,
 				'extras' => $extras,
+				'items' => $price['items'] ?? [],
+				'extras_breakdown' => $price['extras_breakdown'] ?? [],
 				'breakdown' => $price['breakdown'],
-				'frontend_breakdown' => $frontend_breakdown,
 			], $price['total_price'], $booking_id);
 
 			$cart_added = true;
-			error_log('SpaceBooking: Booking #' . $booking_id . ' added to cart directly');
+			error_log('SpaceBooking: Multi-item booking #' . $booking_id . ' (' . count($selected_item_ids) . ' items) added to cart');
 		} catch (\RuntimeException $e) {
 			error_log('SpaceBooking: Direct cart add failed for #' . $booking_id . ': ' . $e->getMessage());
-			// Fallback: Use transient + session link for checkout page
+			// Fallback transient with full data
 			$pending_data = [
 				'booking_data' => [
 					'space_id' => $space_id,
 					'package_id' => $package_id,
+					'selected_item_ids' => $selected_item_ids,
 					'date' => $date,
 					'start_time' => $start_time,
 					'end_time' => $end_time,
 					'customer_name' => $name,
 					'customer_email' => $email,
 					'extras' => $extras,
+					'items' => $price['items'] ?? [],
+					'extras_breakdown' => $price['extras_breakdown'] ?? [],
 					'breakdown' => $price['breakdown'],
 				],
 				'total_price' => $price['total_price'],
 			];
-			set_transient('sb_pending_checkout_' . $booking_id, $pending_data, 1800);  // 30 min
-			error_log('SpaceBooking: Booking #' . $booking_id . ' stored in transient (session unavailable in REST)');
-			// Session set removed - using transient fallback in populate_pending_cart()
+			set_transient('sb_pending_checkout_' . $booking_id, $pending_data, 1800);
+			error_log('SpaceBooking: Multi-item #' . $booking_id . ' in transient');
 		}
 
-		// Always redirect to checkout, not cart
 		$checkout_url = wc_get_checkout_url();
 
-		error_log('SpaceBooking: Booking #' . $booking_id . ' → checkout_url: ' . $checkout_url . ' (cart_direct: ' . json_encode($cart_added) . ')');
+		error_log('SpaceBooking: Booking #' . $booking_id . ' → ' . $checkout_url . ' (direct: ' . ($cart_added ? 'yes' : 'transient') . ')');
 
 		return new WP_REST_Response([
 			'booking_id' => $booking_id,
 			'checkout_url' => $checkout_url,
-			'total_price' => $price['total_price'],
-			'breakdown' => $price['breakdown'],
+			...$price,  // Full price structure
 			'cart_added_directly' => $cart_added,
 		], 201);
 	}

@@ -99,13 +99,23 @@ export interface PriceBreakdownItem {
   };
 }
 
+export interface PricingItemDetail {
+  id: number;
+  type: "sb_space" | "sb_package";
+  title: string;
+  subtotal: number;
+  breakdown: PriceBreakdownItem[];
+}
+
 export interface PricingResponse {
   base_price: number;
-  modifier_price: number;
+  modifier_price?: number;
   extras_price: number;
   total_price: number;
   duration_hours: number;
   breakdown: PriceBreakdownItem[];
+  items?: PricingItemDetail[];
+  extras_breakdown?: PriceBreakdownItem[];
 }
 
 export interface BookingCreateResponse {

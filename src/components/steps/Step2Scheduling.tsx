@@ -77,6 +77,7 @@ export function Step2Scheduling() {
           space_id: getPrimarySpaceId() ?? 0,
           date: selectedDate!,
           start_time: slot.start,
+          item_ids: [],
           end_time: slot.end,
           extras: [],
           package_id: selectedItems.find((i) => i.type === "package")?.id,
@@ -90,13 +91,14 @@ export function Step2Scheduling() {
     }
   };
 
-  // Auto-set first valid end time (>= minDuration) when start changes
+  // Auto-set first valid end time (>= minDuration) when start changes (SKIP for fixed slots)
   useEffect(() => {
+    if (hasFixedSlots) return; // Fixed slots handle their own end_time
     const firstValidEnd = getFirstValidEnd();
     if (firstValidEnd) {
       setEndTime(firstValidEnd);
     }
-  }, [selectedStartTime, slots, minDuration]);
+  }, [selectedStartTime, slots, minDuration, hasFixedSlots]);
 
   // Minimum selectable date = today
   const today = new Date().toISOString().split("T")[0];
@@ -104,15 +106,23 @@ export function Step2Scheduling() {
   useEffect(() => {
     const spaceId = getPrimarySpaceId();
     if (!selectedDate || spaceId === null) return;
+    console.group("AVAILABILITY LOAD");
+    console.log("fetchAvailability spaceId:", spaceId, "date:", selectedDate);
     setLoading(true);
     setError("");
     setApiResponse(null);
     fetchAvailability(spaceId, selectedDate)
       .then((res) => {
+        console.log("AVAILABILITY RES:", res);
+        console.log("slots:", res.slots);
         setSlots(res.slots);
         setApiResponse(res);
+        console.groupEnd();
       })
-      .catch((e: Error) => setError(e.message))
+      .catch((e: Error) => {
+        console.error("AVAIL ERROR:", e.message);
+        setError(e.message);
+      })
       .finally(() => setLoading(false));
   }, [selectedDate, getPrimarySpaceId()]);
 
