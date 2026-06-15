@@ -97,35 +97,13 @@ final class AvailabilityService
 
 		error_log('AVAIL INTERSECTION: All spaces to check: ' . json_encode($all_space_ids_to_check));
 
-		error_log('AVAIL INTERSECTION: About to check global blockers for date=' . $date);
-
-		// Check global resources that block across ALL spaces
-		$global_blockers = $this->get_global_resource_blockers($date, '10:00', '12:00');
-		error_log('AVAIL INTERSECTION: Global blockers result: ' . json_encode($global_blockers));
-		if (!empty($global_blockers)) {
-			$blockers = [];
-			foreach ($global_blockers as $resource) {
-				$title = get_the_title($resource['space_id']) ?: "Global Resource #{$resource['space_id']}";
-				$blockers[] = [
-					'id' => $resource['space_id'],
-					'title' => $title,
-					'reason' => 'global_resource',
-					'message' => "Reason: {$title} is already booked for this time."
-				];
-			}
-			error_log('AVAIL INTERSECTION: Returning GLOBAL BLOCKERS - no slots!');
-			return [
-				'slots' => [],
-				'blockers' => $blockers,
-				'is_intersection' => true
-			];
-		}
-
 		// Use combined space IDs for availability check
 		$primary_id = $all_space_ids_to_check[0] ?? 0;
 		error_log('AVAIL INTERSECTION: Getting slots for primary_id=' . $primary_id . ', date=' . $date . ', step_mins=' . $step_mins);
 		$slots_result = $this->get_slots($primary_id, $date, $step_mins);
-		$raw_slots = $slots_result['slots'] ?? [];
+		$global_slot_result = $this->apply_global_resource_blocking($slots_result['slots'] ?? [], $date);
+		$raw_slots = $global_slot_result['slots'];
+		$global_slot_blockers = $global_slot_result['blockers'];
 		error_log('AVAIL INTERSECTION: Raw slots count: ' . count($raw_slots));
 
 		$has_blocked = false;
@@ -151,17 +129,21 @@ final class AvailabilityService
 				break;
 			}
 
+			foreach ($global_slot_blockers as $global_blocker) {
+				$blockers[$global_blocker['id']] = $global_blocker;
+			}
+
 			return [
 				'slots' => array_values(array_filter($raw_slots, fn($s) => !empty($s['available']))),
-				'blockers' => $blockers,
+				'blockers' => array_values($blockers),
 				'is_intersection' => true
 			];
 		}
 
 		if (count($all_space_ids_to_check) === 1) {
 			return [
-				'slots' => $slots_result['slots'],
-				'blockers' => [],
+				'slots' => $raw_slots,
+				'blockers' => $global_slot_blockers,
 				'is_intersection' => false
 			];
 		}
@@ -261,6 +243,10 @@ final class AvailabilityService
 		
 		error_log('SB_DEBUG: Common slots after intersection: ' . count($common_slots) . ' from ' . count($available_in_first) . ' available in first space');
 
+		$global_common_result = $this->apply_global_resource_blocking($common_slots, $date);
+		$common_slots = array_values(array_filter($global_common_result['slots'], fn($slot) => !empty($slot['available'])));
+		$global_common_blockers = $global_common_result['blockers'];
+
 		if (count($common_slots) > 0) {
 			foreach ($space_ids as $space_id) {
 				$already_blocked = false;
@@ -285,6 +271,10 @@ final class AvailabilityService
 					];
 				}
 			}
+		}
+
+		if (empty($blockers) && count($common_slots) === 0 && !empty($global_common_blockers)) {
+			$blockers = $global_common_blockers;
 		}
 
 		if (empty($blockers)) {
@@ -359,6 +349,29 @@ final class AvailabilityService
 		];
 	}
 
+	public function get_unavailable_dates_for_month(array $space_ids, string $month, int $step_mins = 60, array $package_ids = []): array
+	{
+		$month_start = DateTime::createFromFormat('Y-m-d', $month . '-01');
+		if (!$month_start) {
+			return [];
+		}
+
+		$month_end = (clone $month_start)->modify('last day of this month');
+		$cursor = clone $month_start;
+		$unavailable_dates = [];
+
+		while ($cursor <= $month_end) {
+			$date = $cursor->format('Y-m-d');
+			$result = $this->get_intersection_slots($space_ids, $date, $step_mins, $package_ids);
+			if (empty($result['slots'])) {
+				$unavailable_dates[] = $date;
+			}
+			$cursor->add(new DateInterval('P1D'));
+		}
+
+		return $unavailable_dates;
+	}
+
 	/**
 	 * Get global resources that are booked for the given time.
 	 */
@@ -386,12 +399,54 @@ final class AvailabilityService
             FROM {$wpdb->prefix}sb_bookings 
             WHERE space_id IN ({$placeholders})
             AND booking_date = %s 
-            AND status IN ('confirmed', 'in_review')
+            AND status IN ('confirmed', 'in_review', 'paid')
             AND start_time < %s 
             AND end_time > %s
         ", array_merge($global_resources, [$date, $end_time, $start_time])), ARRAY_A);
 
 		return $results ?: [];
+	}
+
+	private function apply_global_resource_blocking(array $slots, string $date): array
+	{
+		if (empty($slots)) {
+			return [
+				'slots' => [],
+				'blockers' => [],
+			];
+		}
+
+		$updated_slots = [];
+		$blockers = [];
+
+		foreach ($slots as $slot) {
+			if (!empty($slot['available'])) {
+				$global_blockers = $this->get_global_resource_blockers($date, $slot['start'], $slot['end']);
+				if (!empty($global_blockers)) {
+					$slot['available'] = false;
+					foreach ($global_blockers as $resource) {
+						$resource_id = (int) ($resource['space_id'] ?? 0);
+						if ($resource_id <= 0) {
+							continue;
+						}
+						$title = get_the_title($resource_id) ?: "Global Resource #{$resource_id}";
+						$blockers[$resource_id] = [
+							'id' => $resource_id,
+							'title' => $title,
+							'reason' => 'global_resource',
+							'message' => "Reason: {$title} is already booked for this time."
+						];
+					}
+				}
+			}
+
+			$updated_slots[] = $slot;
+		}
+
+		return [
+			'slots' => $updated_slots,
+			'blockers' => array_values($blockers),
+		];
 	}
 
 	/**

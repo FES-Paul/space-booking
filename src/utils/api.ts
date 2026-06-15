@@ -2,6 +2,7 @@ import type {
   AvailabilityResponse,
   BookingCreateResponse,
   Extra,
+  MonthAvailabilityResponse,
   Package,
   PriceBreakdownItem,
   PricingResponse,
@@ -64,6 +65,18 @@ export const fetchMultiAvailability = (
   packageIds.forEach((id) => qs.append("package_ids[]", String(id)));
   const url = `/availability/multi?${qs.toString()}`;
   return apiFetch<AvailabilityResponse>(url);
+};
+
+export const fetchMonthAvailability = (
+  spaceIds: number[],
+  month: string,
+  packageIds: number[] = [],
+) => {
+  const qs = new URLSearchParams();
+  qs.set("month", month);
+  spaceIds.forEach((id) => qs.append("space_ids[]", String(id)));
+  packageIds.forEach((id) => qs.append("package_ids[]", String(id)));
+  return apiFetch<MonthAvailabilityResponse>(`/availability/month?${qs.toString()}`);
 };
 
 // ── Extras ────────────────────────────────────────────────────────────────────

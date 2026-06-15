@@ -62,6 +62,37 @@ final class AvailabilityController extends WP_REST_Controller
 			],
 		]);
 
+		register_rest_route($this->namespace, '/availability/month', [
+			[
+				'methods' => WP_REST_Server::READABLE,
+				'callback' => [$this, 'get_month_availability'],
+				'permission_callback' => '__return_true',
+				'args' => [
+					'space_ids' => [
+						'required' => false,
+						'type' => 'array',
+						'default' => [],
+						'sanitize_callback' => function ($input) {
+							return array_map('absint', (array) ($input ?: []));
+						},
+					],
+					'package_ids' => [
+						'required' => false,
+						'type' => 'array',
+						'default' => [],
+						'sanitize_callback' => function ($input) {
+							return array_map('absint', (array) ($input ?: []));
+						},
+					],
+					'month' => [
+						'required' => true,
+						'sanitize_callback' => 'sanitize_text_field',
+						'validate_callback' => [$this, 'validate_month'],
+					],
+				],
+			],
+		]);
+
 		// Extras availability for a specific time window
 		register_rest_route($this->namespace, '/extras', [
 			[
@@ -252,11 +283,79 @@ final class AvailabilityController extends WP_REST_Controller
 		return rest_ensure_response($result);
 	}
 
+	public function get_month_availability(WP_REST_Request $request): WP_REST_Response
+	{
+		$space_ids_raw = $request->get_param('space_ids');
+		$package_ids_raw = $request->get_param('package_ids');
+		$month = (string) $request->get_param('month');
+		$step_mins = (int) get_option('sb_slot_interval_minutes', 60);
+
+		$space_ids = [];
+		if ($space_ids_raw) {
+			$space_ids = is_array($space_ids_raw) ? array_map('intval', $space_ids_raw) : [intval($space_ids_raw)];
+		}
+
+		$package_ids = [];
+		if ($package_ids_raw) {
+			$package_ids = is_array($package_ids_raw) ? array_map('intval', $package_ids_raw) : [intval($package_ids_raw)];
+		}
+
+		if (empty($space_ids) && empty($package_ids)) {
+			return new WP_REST_Response([
+				'message' => 'Either space_ids or package_ids must be provided.'
+			], 422);
+		}
+
+		foreach ($space_ids as $space_id) {
+			$post = get_post($space_id);
+			if (!$post || $post->post_type !== 'sb_space') {
+				return new WP_REST_Response([
+					'message' => "Space #$space_id not found."
+				], 404);
+			}
+		}
+
+		foreach ($package_ids as $package_id) {
+			$post = get_post($package_id);
+			if (!$post || $post->post_type !== 'sb_package') {
+				return new WP_REST_Response([
+					'message' => "Package #$package_id not found."
+				], 404);
+			}
+		}
+
+		$resolved_space_ids = $this->availability->resolve_selected_space_ids($space_ids, $package_ids);
+		if (empty($resolved_space_ids)) {
+			return new WP_REST_Response([
+				'message' => 'Unable to resolve any space IDs for the selected packages.'
+			], 422);
+		}
+
+		$unavailable_dates = $this->availability->get_unavailable_dates_for_month(
+			$resolved_space_ids,
+			$month,
+			$step_mins,
+			$package_ids
+		);
+
+		return rest_ensure_response([
+			'month' => $month,
+			'space_ids' => $resolved_space_ids,
+			'unavailable_dates' => $unavailable_dates,
+		]);
+	}
+
 	// ── Validators ───────────────────────────────────────────────────────────
 
 	public function validate_date($value): bool
 	{
 		$d = \DateTime::createFromFormat('Y-m-d', $value);
 		return $d && $d->format('Y-m-d') === $value;
+	}
+
+	public function validate_month($value): bool
+	{
+		$d = \DateTime::createFromFormat('Y-m', $value);
+		return $d && $d->format('Y-m') === $value;
 	}
 }

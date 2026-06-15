@@ -96,7 +96,7 @@ export interface TimeSlot {
 export interface BlockerInfo {
   id: number;
   title: string;
-  reason: "fully_booked" | "limited_availability";
+  reason: "fully_booked" | "limited_availability" | "global_resource";
 }
 
 export interface AvailabilityResponse {
@@ -113,6 +113,12 @@ export interface AvailabilityResponse {
   is_multi?: boolean;
   is_intersection?: boolean;
   blockers?: BlockerInfo[];
+}
+
+export interface MonthAvailabilityResponse {
+  month: string;
+  space_ids: number[];
+  unavailable_dates: string[];
 }
 
 export interface PriceBreakdownItem {

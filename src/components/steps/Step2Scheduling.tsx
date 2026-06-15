@@ -1,10 +1,36 @@
 import { useEffect, useState } from "react";
+import Calendar from "react-calendar";
+import "react-calendar/dist/Calendar.css";
 import { useBookingStore } from "@/store/bookingStore";
-import { fetchMultiAvailability } from "@/utils/api";
+import { fetchMonthAvailability, fetchMultiAvailability } from "@/utils/api";
 import { formatBookingDate } from "@/utils/date";
 import type { AvailabilityResponse, TimeSlot, Package } from "@/types";
 
 import { fetchPricing } from "@/utils/api";
+
+const formatDateValue = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const formatMonthValue = (date: Date): string =>
+  formatDateValue(date).slice(0, 7);
+
+const parseDateValue = (value: string): Date | null => {
+  if (!value) {
+    return null;
+  }
+
+  const parts = value.split("-").map(Number);
+  if (parts.length !== 3) {
+    return null;
+  }
+
+  const [year, month, day] = parts;
+  return new Date(year, month - 1, day);
+};
 
 export function Step2Scheduling() {
   const {
@@ -24,6 +50,9 @@ export function Step2Scheduling() {
   // because it would get stale on initial render. We always call it
   // INSIDE useEffect or handlers to get FRESH values.
 
+  const today = new Date().toISOString().split("T")[0];
+  const todayDate = parseDateValue(today) ?? new Date();
+
   const [slots, setSlots] = useState<TimeSlot[]>([]);
   const [apiResponse, setApiResponse] = useState<AvailabilityResponse | null>(
     null,
@@ -35,6 +64,12 @@ export function Step2Scheduling() {
   const [blockers, setBlockers] = useState<
     { id: number; title: string; reason?: string }[]
   >([]);
+  const [calendarMonth, setCalendarMonth] = useState(
+    selectedDate ? selectedDate.slice(0, 7) : today.slice(0, 7),
+  );
+  const [unavailableDates, setUnavailableDates] = useState<string[]>([]);
+  const [calendarLoading, setCalendarLoading] = useState(false);
+  const [calendarError, setCalendarError] = useState("");
 
   const timeToMinutes = (timeStr: string): number => {
     const [h, m] = timeStr.split(":").map(Number);
@@ -77,6 +112,8 @@ export function Step2Scheduling() {
   const hasFixedSlots =
     apiResponse?.has_fixed_slots ?? slots.some((s) => s.slot_id);
   const apiMessage = apiResponse?.message;
+  const hasNoAvailability = !loading && !!selectedDate && slots.length === 0;
+  const unavailableDateSet = new Set(unavailableDates);
 
   const isStartValid = (slotIndex: number): boolean => {
     if (slotIndex + minDuration > slots.length) return false;
@@ -105,7 +142,7 @@ export function Step2Scheduling() {
           : 0;
         const packageIds = useBookingStore.getState().getAllPackageIds();
         const itemIds = selectedItems.map((item) => Number(item.id));
-        
+
         const pricing = await fetchPricing({
           space_id: firstSpaceId,
           date: selectedDate!,
@@ -133,9 +170,9 @@ export function Step2Scheduling() {
     }
   }, [selectedStartTime, slots, minDuration, hasFixedSlots]);
 
-  // Minimum selectable date = today
-  const today = new Date().toISOString().split("T")[0];
-  const formattedSelectedDate = selectedDate ? formatBookingDate(selectedDate) : "";
+  const formattedSelectedDate = selectedDate
+    ? formatBookingDate(selectedDate)
+    : "";
 
   // ARRAY-ONLY: Load resourceMap ONCE when component mounts
   // CRITICAL: Wait for resourceMap to BE FULLY LOADED before using getLockedResourceIds
@@ -155,6 +192,81 @@ export function Step2Scheduling() {
     }
   }, []);
 
+  useEffect(() => {
+    if (!selectedDate) {
+      return;
+    }
+
+    const nextMonth = selectedDate.slice(0, 7);
+    if (nextMonth !== calendarMonth) {
+      setCalendarMonth(nextMonth);
+    }
+  }, [selectedDate, calendarMonth]);
+
+  const resolveAvailabilitySelection = () => {
+    const freshSpaceIds = getLockedResourceIds();
+    const packageIds = selectedItems
+      .filter((item) => item.type === "package")
+      .map((item) => Number(item.id));
+
+    let spaceIds: number[] = [];
+    for (const item of selectedItems) {
+      if (item.type === "space") {
+        spaceIds.push(Number(item.id));
+      } else if (item.type === "package") {
+        const pkg = item as Package;
+        if (pkg.space_ids && Array.isArray(pkg.space_ids)) {
+          spaceIds.push(...pkg.space_ids);
+        }
+      }
+    }
+
+    for (const id of freshSpaceIds) {
+      const isSelected = selectedItems.some((item) => Number(item.id) === id);
+      const isPackage = selectedItems.some(
+        (item) => item.type === "package" && Number(item.id) === id,
+      );
+      if (!isSelected && !isPackage) {
+        const itemType = resourceMap?.[id]?.type;
+        if (itemType === "space") {
+          spaceIds.push(id);
+        }
+      }
+    }
+
+    return {
+      spaceIds: [...new Set(spaceIds)],
+      packageIds,
+    };
+  };
+
+  useEffect(() => {
+    if (!isMapReady) {
+      return;
+    }
+
+    const { spaceIds, packageIds } = resolveAvailabilitySelection();
+    if (spaceIds.length === 0 && packageIds.length === 0) {
+      setUnavailableDates([]);
+      setCalendarError("");
+      return;
+    }
+
+    setCalendarLoading(true);
+    setCalendarError("");
+
+    fetchMonthAvailability(spaceIds, calendarMonth, packageIds)
+      .then((res) => {
+        setUnavailableDates(res.unavailable_dates ?? []);
+      })
+      .catch((e: Error) => {
+        console.error("MONTH AVAIL ERROR:", e.message);
+        setUnavailableDates([]);
+        setCalendarError(e.message);
+      })
+      .finally(() => setCalendarLoading(false));
+  }, [calendarMonth, selectedItems, isMapReady]);
+
   // GUARDRAIL: Wait for resourceMap to FULLY LOAD before fetching availability
   // ARRAY-ONLY MANDATE: Must use the ENTIRE array, not single ID
   // CRITICAL: Re-fetch when EITHER isMapReady OR selectedItems changes
@@ -163,51 +275,7 @@ export function Step2Scheduling() {
       return;
     }
 
-    // ARRAY-ONLY MANDATE: Always compute fresh IDs from selectedItems
-    // Uses Append/Remove pattern with cumulative group selection
-    // Resolve selected items to space IDs (handle packages)
-    const freshSpaceIds = getLockedResourceIds();
-
-    // FIX BUG 2: Separate spaces from packages
-    // - Only add EXPLICITLY selected spaces to spaceIds
-    // - Packages go to packageIds (backend resolves them)
-    // This prevents false positive where package's included space conflicts with itself
-
-    // NEW: Extract package IDs from selectedItems for conflict detection
-    const packageIds = selectedItems
-      .filter((item) => item.type === "package")
-      .map((item) => Number(item.id));
-
-    // Add ALL selected spaces (including package's included spaces)
-    // Frontend resolves package's space_ids so backend gets complete list
-    let spaceIds: number[] = [];
-    for (const item of selectedItems) {
-      if (item.type === "space") {
-        spaceIds.push(Number(item.id));
-      } else if (item.type === "package") {
-        // Add package's included spaces
-        const pkg = item as Package;
-        if (pkg.space_ids && Array.isArray(pkg.space_ids)) {
-          spaceIds.push(...pkg.space_ids);
-        }
-      }
-    }
-    // Also add any locked resource IDs that aren't already selected (physical resources)
-    // BUT: Only add if they're SPACE IDs, not package IDs
-    for (const id of freshSpaceIds) {
-      const isSelected = selectedItems.some(i => Number(i.id) === id);
-      const isPackage = selectedItems.some(i => i.type === "package" && Number(i.id) === id);
-      if (!isSelected && !isPackage) {
-        // Only add if it's a space (check via resourceMap type)
-        const itemType = resourceMap?.[id]?.type;
-        if (itemType === "space") {
-          spaceIds.push(id);
-        }
-        // Skip packages - they're handled separately via packageIds
-      }
-    }
-    // Dedupe
-    spaceIds = [...new Set(spaceIds)];
+    const { spaceIds, packageIds } = resolveAvailabilitySelection();
 
     // FIX: Allow API call when packages are selected (even without explicit spaces)
     // Package-only bookings should resolve to their included space
@@ -282,17 +350,60 @@ export function Step2Scheduling() {
 
       {/* Date picker */}
       <div className="sb-field">
-        <label className="sb-label" htmlFor="sb-date">
-          Date
-        </label>
-        <input
-          id="sb-date"
-          type="date"
-          className="sb-input"
-          min={today}
-          value={selectedDate}
-          onChange={(e) => setDate(e.target.value)}
-        />
+        <div className="sb-label">Date</div>
+        <div className="sb-calendar-shell">
+          <Calendar
+            activeStartDate={parseDateValue(`${calendarMonth}-01`) ?? todayDate}
+            formatShortWeekday={(_locale, date) =>
+              date
+                .toLocaleDateString("en-US", { weekday: "short" })
+                .slice(0, 2)
+                .toUpperCase()
+            }
+            minDate={todayDate}
+            next2Label={null}
+            onActiveStartDateChange={({ activeStartDate, view }) => {
+              if (view === "month" && activeStartDate) {
+                setCalendarMonth(formatMonthValue(activeStartDate));
+              }
+            }}
+            onChange={(value) => {
+              if (value instanceof Date) {
+                setDate(formatDateValue(value));
+              }
+            }}
+            prev2Label={null}
+            showNeighboringMonth={false}
+            tileClassName={({ date, view }) => {
+              if (view !== "month") {
+                return undefined;
+              }
+
+              const dateKey = formatDateValue(date);
+              if (unavailableDateSet.has(dateKey)) {
+                return "sb-calendar__day sb-calendar__day--unavailable";
+              }
+
+              return "sb-calendar__day";
+            }}
+            tileDisabled={({ date, view }) => {
+              if (view !== "month") {
+                return false;
+              }
+
+              return unavailableDateSet.has(formatDateValue(date));
+            }}
+            value={selectedDate ? parseDateValue(selectedDate) : null}
+          />
+        </div>
+        {calendarLoading && (
+          <p className="sb-help sb-calendar__help">
+            Checking fully booked dates...
+          </p>
+        )}
+        {calendarError && (
+          <p className="sb-error sb-error--mt">{calendarError}</p>
+        )}
         {formattedSelectedDate && (
           <p className="sb-help" style={{ marginTop: "6px" }}>
             Selected date: <strong>{formattedSelectedDate}</strong>
@@ -492,8 +603,8 @@ export function Step2Scheduling() {
         </>
       )}
 
-      {!loading && selectedDate && slots.length === 0 && (
-        <div className="sb-empty">
+      {hasNoAvailability && (
+        <div className="sb-empty sb-empty--availability">
           {blockers && blockers.length > 0 ? (
             <>
               <p style={{ fontWeight: 600, marginBottom: "8px" }}>

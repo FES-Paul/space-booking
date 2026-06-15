@@ -34,7 +34,12 @@ export function Step1Selection() {
   // Load data and resource map
   useEffect(() => {
     setLoading(true);
-    Promise.all([fetchSpaces(), fetchPackages(), fetchAllExtras(), loadResourceMap()])
+    Promise.all([
+      fetchSpaces(),
+      fetchPackages(),
+      fetchAllExtras(),
+      loadResourceMap(),
+    ])
       .then(([s, p, e]) => {
         setSpaces(s);
         setPackages(p);
@@ -45,7 +50,7 @@ export function Step1Selection() {
 
   // Helper: Resolve extra ID to title
   const getExtraTitle = (extraId: number): string => {
-    const extra = extras.find(e => e.id === extraId);
+    const extra = extras.find((e) => e.id === extraId);
     return extra?.title || `Extra #${extraId}`;
   };
 
@@ -105,7 +110,11 @@ export function Step1Selection() {
   const isPackageBlockedBySelection = useCallback(
     (item: Space | Package) => {
       const pkg = item as Package;
-      if (!pkg.space_ids || !Array.isArray(pkg.space_ids) || pkg.space_ids.length === 0) {
+      if (
+        !pkg.space_ids ||
+        !Array.isArray(pkg.space_ids) ||
+        pkg.space_ids.length === 0
+      ) {
         return false;
       }
       // Check if any of the package's spaces are already selected
@@ -135,17 +144,18 @@ export function Step1Selection() {
     const selected = isSelectedCard(item);
     const locked = isLockedCard(item);
     const covered = isCoveredByPackage(item);
-    const packageBlocked = type === "package" && isPackageBlockedBySelection(item);
+    const packageBlocked =
+      type === "package" && isPackageBlockedBySelection(item);
     const blockingNames = type === "package" ? getBlockingSpaceNames(item) : [];
     const space = item as Space;
     const overrides = space.price_overrides ?? [];
     const packageSpaceIds = (item as Package).space_ids ?? [];
     const packageExtraIds = (item as Package).extra_ids ?? [];
     const itemId = item.id;
-    
+
     // Card is locked if either locked by physical overlap OR blocked by selected spaces
     const isCardLocked = locked || packageBlocked;
-    
+
     return (
       <div
         key={itemId}
@@ -232,23 +242,25 @@ export function Step1Selection() {
                 {(item as Package).duration > 0 &&
                   ` · ${(item as Package).duration}h`}
               </p>
-              
+
               {/* Display package inclusions */}
               <div className="sb-package-inclusions">
                 {packageSpaceIds.length > 0 && (
                   <div className="sb-package-spaces">
-                    <span className="font-medium">Includes spaces:</span> {spaces
-                      .filter(space => packageSpaceIds.includes(space.id))
-                      .map(space => space.title)
-                      .join(', ')}
+                    <span className="font-medium">Includes spaces:</span>{" "}
+                    {spaces
+                      .filter((space) => packageSpaceIds.includes(space.id))
+                      .map((space) => space.title)
+                      .join(", ")}
                   </div>
                 )}
-                
+
                 {packageExtraIds.length > 0 && (
                   <div className="sb-package-extras">
-                    <span className="font-medium">Includes extras:</span> {packageExtraIds
-                      .map(extraId => getExtraTitle(extraId))
-                      .join(', ')}
+                    <span className="font-medium">Includes extras:</span>{" "}
+                    {packageExtraIds
+                      .map((extraId) => getExtraTitle(extraId))
+                      .join(", ")}
                   </div>
                 )}
               </div>
@@ -263,7 +275,11 @@ export function Step1Selection() {
         {isCardLocked && (
           <span
             className="sb-card__lock"
-            aria-label={packageBlocked ? "Locked by selected space" : "Locked by package selection"}
+            aria-label={
+              packageBlocked
+                ? "Locked by selected space"
+                : "Locked by package selection"
+            }
           >
             🔒
           </span>
@@ -278,14 +294,17 @@ export function Step1Selection() {
           </span>
         )}
         {/* Show "Space selected" badge for packages blocked by selected spaces */}
-        {type === "package" && packageBlocked && !selected && blockingNames.length > 0 && (
-          <span
-            className="sb-card__badge sb-card__badge--space"
-            aria-label="Blocked by selected space"
-          >
-            🔒 Space already selected: {blockingNames.join(", ")}
-          </span>
-        )}
+        {type === "package" &&
+          packageBlocked &&
+          !selected &&
+          blockingNames.length > 0 && (
+            <span
+              className="sb-card__badge sb-card__badge--space"
+              aria-label="Blocked by selected space"
+            >
+              🔒 Space already selected: {blockingNames.join(", ")}
+            </span>
+          )}
       </div>
     );
   };
@@ -296,9 +315,8 @@ export function Step1Selection() {
         Choose Spaces or Packages (Multi-Select)
       </h2>
       <p className="sb-step__subtitle">
-        You can select multiple spaces or multiple packages. You cannot select a
-        package and one of its included spaces at the same time, and conflicting
-        items will be locked automatically. Click selected cards again to unselect.
+        Select multiple spaces or packages. Choosing a package automatically
+        locks its included spaces. Click again to deselect.
       </p>
 
       {/* Tabs */}

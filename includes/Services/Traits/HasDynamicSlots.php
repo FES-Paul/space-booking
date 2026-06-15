@@ -85,6 +85,7 @@ trait HasDynamicSlots
 
         // CONSOLIDATED: get_blocking_intervals already includes confirmed + pending (non-expired)
         $blocked = $repo->get_blocking_intervals([$space_id], $date);
+        $pending_intervals = $repo->get_pending_intervals_for_spaces([$space_id], $date);
         error_log('SB_DEBUG: generate_dynamic_slots_single blocking for space ' . $space_id . ': ' . count($blocked));
 
         [$open, $close] = $this->resolve_effective_hours($space_id, $date);

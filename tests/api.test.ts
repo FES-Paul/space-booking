@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   fetchMultiAvailability,
+  fetchMonthAvailability,
   fetchAvailability,
   fetchSpaces,
   fetchSpace,
@@ -168,6 +169,55 @@ describe("Availability API", () => {
         expect.stringContaining(
           "space_ids%5B%5D=223&space_ids%5B%5D=10&space_ids%5B%5D=224",
         ),
+        expect.any(Object),
+      );
+    });
+  });
+
+  describe("fetchMonthAvailability", () => {
+    it("should fetch disabled dates for a month", async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            month: "2026-06",
+            space_ids: [224],
+            unavailable_dates: ["2026-06-10", "2026-06-11"],
+          }),
+      });
+
+      const result = await fetchMonthAvailability([224], "2026-06");
+
+      expect(result.month).toBe("2026-06");
+      expect(result.unavailable_dates).toEqual([
+        "2026-06-10",
+        "2026-06-11",
+      ]);
+    });
+
+    it("should build correct URL with month and package filters", async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            month: "2026-06",
+            space_ids: [224],
+            unavailable_dates: [],
+          }),
+      });
+
+      await fetchMonthAvailability([224], "2026-06", [100, 101]);
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("month=2026-06"),
+        expect.any(Object),
+      );
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("space_ids%5B%5D=224"),
+        expect.any(Object),
+      );
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("package_ids%5B%5D=100&package_ids%5B%5D=101"),
         expect.any(Object),
       );
     });
