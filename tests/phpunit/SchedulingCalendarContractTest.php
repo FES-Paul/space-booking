@@ -26,7 +26,9 @@ final class SchedulingCalendarContractTest extends TestCase
         $this->assertStringContainsString('validate_month', $availabilityController);
         $this->assertStringContainsString('get_unavailable_dates_for_month', $availabilityService);
         $this->assertStringContainsString('apply_global_resource_blocking', $availabilityService);
+        $this->assertStringContainsString('build_full_slot_timeline', $availabilityService);
         $this->assertStringContainsString('$slot_copy[\'available\'] = $is_available_in_all;', $availabilityService);
+        $this->assertStringContainsString('$has_available_slots = count(array_filter($result[\'slots\'] ?? [], fn($slot) => !empty($slot[\'available\']))) > 0;', $availabilityService);
         $this->assertStringContainsString('$has_available_slots = count(array_filter($slots, fn($slot) => !empty($slot[\'available\']))) > 0;', $availabilityController);
         $this->assertStringContainsString('react-calendar', $step2Scheduling);
         $this->assertStringContainsString('fetchMonthAvailability', $step2Scheduling);

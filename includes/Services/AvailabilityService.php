@@ -169,46 +169,7 @@ final class AvailabilityService
 			}
 		}
 
-		// Build the full slot timeline from the first non-empty space so booked
-		// separators remain visible in the UI and break multi-select continuity.
-		$first_space_slots = [];
-		foreach ($all_space_ids_to_check as $space_id) {
-			if (!empty($per_space_slots[$space_id])) {
-				$first_space_slots = $per_space_slots[$space_id];
-				break;
-			}
-		}
-
-		$common_slots = [];
-		foreach ($first_space_slots as $first_slot) {
-			$slot_start = $first_slot['start'];
-			$slot_end = $first_slot['end'];
-
-			$is_available_in_all = !empty($first_slot['available']);
-
-			for ($i = 1; $i < count($all_space_ids_to_check); $i++) {
-				$space_id = $all_space_ids_to_check[$i];
-				$space_has_slot = false;
-				$slot_available_in_space = false;
-
-				foreach ($per_space_slots[$space_id] as $space_slot) {
-					if ($space_slot['start'] === $slot_start && $space_slot['end'] === $slot_end) {
-						$space_has_slot = true;
-						$slot_available_in_space = !empty($space_slot['available']);
-						break;
-					}
-				}
-
-				if (!$space_has_slot || !$slot_available_in_space) {
-					$is_available_in_all = false;
-					break;
-				}
-			}
-
-			$slot_copy = $first_slot;
-			$slot_copy['available'] = $is_available_in_all;
-			$common_slots[] = $slot_copy;
-		}
+		$common_slots = $this->build_full_slot_timeline($all_space_ids_to_check, $per_space_slots);
 
 		error_log('SB_DEBUG: Common slot timeline after intersection: ' . count($common_slots));
 
@@ -333,13 +294,61 @@ final class AvailabilityService
 		while ($cursor <= $month_end) {
 			$date = $cursor->format('Y-m-d');
 			$result = $this->get_intersection_slots($space_ids, $date, $step_mins, $package_ids);
-			if (empty($result['slots'])) {
+			$has_available_slots = count(array_filter($result['slots'] ?? [], fn($slot) => !empty($slot['available']))) > 0;
+			if (!$has_available_slots) {
 				$unavailable_dates[] = $date;
 			}
 			$cursor->add(new DateInterval('P1D'));
 		}
 
 		return $unavailable_dates;
+	}
+
+	private function build_full_slot_timeline(array $space_ids, array $per_space_slots): array
+	{
+		$timeline_by_key = [];
+		$availability_by_key = [];
+		$pending_by_key = [];
+
+		foreach ($space_ids as $space_id) {
+			foreach ($per_space_slots[$space_id] ?? [] as $space_slot) {
+				$slot_key = $space_slot['start'] . '|' . $space_slot['end'];
+
+				if (!isset($timeline_by_key[$slot_key])) {
+					$timeline_by_key[$slot_key] = $space_slot;
+				}
+
+				$availability_by_key[$slot_key][$space_id] = !empty($space_slot['available']);
+				$pending_by_key[$slot_key] = ($pending_by_key[$slot_key] ?? false) || !empty($space_slot['has_pending']);
+			}
+		}
+
+		$timeline = array_values($timeline_by_key);
+		usort($timeline, function (array $left, array $right): int {
+			if ($left['start'] === $right['start']) {
+				return strcmp($left['end'], $right['end']);
+			}
+
+			return strcmp($left['start'], $right['start']);
+		});
+
+		foreach ($timeline as &$slot_copy) {
+			$slot_key = $slot_copy['start'] . '|' . $slot_copy['end'];
+			$is_available_in_all = true;
+
+			foreach ($space_ids as $space_id) {
+				if (empty($availability_by_key[$slot_key][$space_id])) {
+					$is_available_in_all = false;
+					break;
+				}
+			}
+
+			$slot_copy['available'] = $is_available_in_all;
+			$slot_copy['has_pending'] = !empty($pending_by_key[$slot_key]);
+		}
+		unset($slot_copy);
+
+		return $timeline;
 	}
 
 	/**
