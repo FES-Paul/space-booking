@@ -718,6 +718,7 @@
   color: var(--sb-text);
   font-weight: 600;
   padding: 12px 6px;
+  margin: 10px;
   transition:
     background var(--sb-transition),
     border-color var(--sb-transition),
