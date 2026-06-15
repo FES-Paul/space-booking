@@ -348,9 +348,10 @@ export function Step2Scheduling() {
     <div className="sb-step sb-step-2">
       <h2 className="sb-step__title">Pick Your Date & Time</h2>
 
-      {/* Date picker */}
-      <div className="sb-field">
-        <div className="sb-label">Date</div>
+      <div className="sb-schedule-layout">
+        <div className="sb-schedule-panel sb-schedule-panel--calendar">
+          <div className="sb-field">
+            <div className="sb-label">Date</div>
         <div className="sb-calendar-shell">
           <Calendar
             activeStartDate={parseDateValue(`${calendarMonth}-01`) ?? todayDate}
@@ -396,6 +397,12 @@ export function Step2Scheduling() {
             value={selectedDate ? parseDateValue(selectedDate) : null}
           />
         </div>
+        <div className="sb-calendar__legend">
+          <span className="sb-calendar__legend-dot sb-calendar__legend-dot--open" />
+          <span>Available</span>
+          <span className="sb-calendar__legend-dot sb-calendar__legend-dot--full" />
+          <span>Fully booked</span>
+        </div>
         {calendarLoading && (
           <p className="sb-help sb-calendar__help">
             Checking fully booked dates...
@@ -404,14 +411,31 @@ export function Step2Scheduling() {
         {calendarError && (
           <p className="sb-error sb-error--mt">{calendarError}</p>
         )}
-        {formattedSelectedDate && (
-          <p className="sb-help" style={{ marginTop: "6px" }}>
-            Selected date: <strong>{formattedSelectedDate}</strong>
-          </p>
-        )}
       </div>
 
-      {loading && <div className="sb-loading">Checking availability…</div>}
+          </div>
+
+        <div className="sb-schedule-panel sb-schedule-panel--details">
+          <div className="sb-schedule-summary">
+            <div className="sb-schedule-summary__eyebrow">Selected date</div>
+            {formattedSelectedDate ? (
+              <div className="sb-schedule-summary__value">
+                {formattedSelectedDate}
+              </div>
+            ) : (
+              <div className="sb-schedule-summary__value sb-schedule-summary__value--muted">
+                Choose a day from the calendar
+              </div>
+            )}
+          </div>
+
+          {!selectedDate && (
+            <div className="sb-schedule-placeholder">
+              Select a date to see the available booking slots.
+            </div>
+          )}
+
+          {loading && <div className="sb-loading">Checking availability...</div>}
       {error && <div className="sb-error">{error}</div>}
 
       {!loading && selectedDate && slots.length > 0 && (
@@ -651,6 +675,9 @@ export function Step2Scheduling() {
           )}
         </div>
       )}
+
+        </div>
+      </div>
 
       <div className="sb-step__actions">
         <button className="sb-btn sb-btn--ghost" onClick={prevStep}>
