@@ -92,6 +92,12 @@ export interface TimeSlot {
   has_pending?: boolean; // true if slot has a pending (unpaid) booking that will expire
 }
 
+export interface SelectedSlotWindow {
+  slotId: string;
+  start: string;
+  end: string;
+}
+
 // NEW: Blocker info for multi-space availability
 export interface BlockerInfo {
   id: number;

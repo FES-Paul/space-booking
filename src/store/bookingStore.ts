@@ -8,6 +8,7 @@ import type {
   Package,
   PriceBreakdownItem,
   ResourceFootprint,
+  SelectedSlotWindow,
   SelectedExtra,
   Space,
   SelectionItem,
@@ -15,6 +16,7 @@ import type {
 } from "../types";
 
 import { checkCartHasBooking, fetchResourceMap } from "../utils/api";
+import { getSelectedSlotSpan } from "../utils/slotSelection";
 
 // New: Track which spaces are covered by selected packages
 interface PackageCoverage {
@@ -45,6 +47,7 @@ interface BookingState {
   resourceMap: Record<number, ResourceFootprint> | null;
   packageCoverage: PackageCoverage[]; // NEW: Track packages and their covered spaces
   selectedDate: string;
+  selectedSlotWindows: SelectedSlotWindow[];
   selectedStartTime: string;
   selectedEndTime: string;
   availableExtras: Extra[];
@@ -69,6 +72,7 @@ interface BookingState {
   getLockedResourceIds: () => number[];
   loadResourceMap: () => Promise<void>;
   setDate: (date: string) => void;
+  setSelectedSlotWindows: (slots: SelectedSlotWindow[]) => void;
   setStartTime: (time: string) => void;
   setEndTime: (time: string) => void;
   setAvailableExtras: (extras: Extra[]) => void;
@@ -132,6 +136,7 @@ export const useBookingStore = create<BookingState>()((set, get) => ({
   resourceMap: null,
   packageCoverage: [], // NEW: Track packages and their covered spaces
   selectedDate: "",
+  selectedSlotWindows: [],
   selectedStartTime: "",
   selectedEndTime: "",
   availableExtras: [],
@@ -528,12 +533,23 @@ clearItems: () => set({ selectedItems: [], lockedResourceIds: [], packageCoverag
   setDate: (date: string) =>
     set({
       selectedDate: date,
+      selectedSlotWindows: [],
       selectedStartTime: "",
       selectedEndTime: "",
       selectedExtras: [],
     }),
+  setSelectedSlotWindows: (slots: SelectedSlotWindow[]) => {
+    const span = getSelectedSlotSpan(slots);
+    set({
+      selectedSlotWindows: slots,
+      selectedStartTime: span?.startTime ?? "",
+      selectedEndTime: span?.endTime ?? "",
+      selectedExtras: [],
+    });
+  },
   setStartTime: (time: string) =>
     set({
+      selectedSlotWindows: [],
       selectedStartTime: time,
       selectedEndTime: "",
       selectedExtras: [],
@@ -878,6 +894,7 @@ reset: () => {
       resourceMap: null,
       packageCoverage: [],
       selectedDate: "",
+      selectedSlotWindows: [],
       selectedStartTime: "",
       selectedEndTime: "",
       availableExtras: [],

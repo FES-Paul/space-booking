@@ -3,6 +3,7 @@ import { useBookingStore } from "@/store/bookingStore";
 import { checkCartHasBooking, createBooking, fetchPricing } from "@/utils/api";
 import { formatBookingDate } from "@/utils/date";
 import type { Package, Space, SelectionItem } from "@/types";
+import { getSelectedSlotSpan, timeToMinutes } from "@/utils/slotSelection";
 
 type SelectedPackageItem = Extract<SelectionItem, { type: "package" }>;
 
@@ -12,6 +13,7 @@ export function Step5Payment() {
     priceBreakdown,
     totalPrice,
     selectedDate,
+    selectedSlotWindows,
     selectedStartTime,
     selectedEndTime,
     customerInfo,
@@ -29,6 +31,7 @@ export function Step5Payment() {
   const [error, setError] = useState("");
   const [formStartedAt] = useState<number>(() => Math.floor(Date.now() / 1000));
   const [recaptchaWidgetId, setRecaptchaWidgetId] = useState<number | null>(null);
+  const selectedSlotSpan = getSelectedSlotSpan(selectedSlotWindows);
 
   const recaptchaConfig = window.sbConfig?.recaptcha;
   const recaptchaEnabled = !!recaptchaConfig?.enabled;
@@ -311,6 +314,11 @@ export function Step5Payment() {
     return `${hour}:${minutes} ${period}`;
   };
 
+  const formatDurationLabel = (minutes: number): string => {
+    const hours = minutes / 60;
+    return Number.isInteger(hours) ? `${hours}h` : `${hours.toFixed(1)}h`;
+  };
+
   const getPackageSpaceIds = (pkg?: Package): number[] => {
     if (!pkg) return [];
     if (Array.isArray(pkg.space_ids) && pkg.space_ids.length > 0) {
@@ -364,6 +372,51 @@ export function Step5Payment() {
           <div className="sb-summary-row"><span>Date</span><span>{formattedSelectedDate || selectedDate}</span></div>
           <div className="sb-summary-row"><span>Time</span><span>{formatTimeTo12Hour(selectedStartTime)} – {formatTimeTo12Hour(selectedEndTime)}</span></div>
         </div>
+
+        {selectedSlotSpan && (
+          <>
+            <h4>Selected Slots</h4>
+            <div className="sb-slot-window-summary">
+              <div className="sb-slot-window-summary__eyebrow">
+                Reserved window
+              </div>
+              <div className="sb-slot-window-summary__time">
+                {formatTimeTo12Hour(selectedSlotSpan.startTime)} -{" "}
+                {formatTimeTo12Hour(selectedSlotSpan.endTime)}
+              </div>
+              <div className="sb-slot-window-summary__meta">
+                {selectedSlotWindows.length} selected{" "}
+                {selectedSlotWindows.length === 1 ? "slot" : "slots"} |{" "}
+                {formatDurationLabel(selectedSlotSpan.totalMinutes)}
+              </div>
+              <ul className="sb-slot-window-list">
+                {selectedSlotWindows.map((selectedSlot) => (
+                  <li
+                    key={selectedSlot.slotId}
+                    className="sb-slot-window-list__item"
+                  >
+                    <span>
+                      {formatTimeTo12Hour(selectedSlot.start)} -{" "}
+                      {formatTimeTo12Hour(selectedSlot.end)}
+                    </span>
+                    <span>
+                      {formatDurationLabel(
+                        timeToMinutes(selectedSlot.end) -
+                          timeToMinutes(selectedSlot.start),
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {selectedSlotSpan.gapMinutes > 0 && (
+                <p className="sb-slot-window-summary__note">
+                  Includes {formatDurationLabel(selectedSlotSpan.gapMinutes)}{" "}
+                  reserved between the selected slots.
+                </p>
+              )}
+            </div>
+          </>
+        )}
 
         {packageQuestionReviewRows.length > 0 && (
           <>

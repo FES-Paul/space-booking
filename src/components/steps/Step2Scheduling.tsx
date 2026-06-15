@@ -4,9 +4,17 @@ import "react-calendar/dist/Calendar.css";
 import { useBookingStore } from "@/store/bookingStore";
 import { fetchMonthAvailability, fetchMultiAvailability } from "@/utils/api";
 import { formatBookingDate } from "@/utils/date";
-import type { AvailabilityResponse, TimeSlot, Package } from "@/types";
-
-import { fetchPricing } from "@/utils/api";
+import type {
+  AvailabilityResponse,
+  Package,
+  TimeSlot,
+} from "@/types";
+import {
+  getSelectedSlotSpan,
+  isSelectedSlotWindowMatch,
+  timeToMinutes,
+  updateContiguousSlotSelection,
+} from "@/utils/slotSelection";
 
 const formatDateValue = (date: Date): string => {
   const year = date.getFullYear();
@@ -36,11 +44,13 @@ export function Step2Scheduling() {
   const {
     selectedItems,
     selectedDate,
+    selectedSlotWindows,
     selectedStartTime,
     selectedEndTime,
     setDate,
-    setStartTime,
     setEndTime,
+    setSelectedSlotWindows,
+    setStartTime,
     nextStep,
     prevStep,
     getLockedResourceIds, // Use getter to compute fresh each time
@@ -59,8 +69,6 @@ export function Step2Scheduling() {
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [, setPricePreview] = useState(0);
-  const [, setPriceLoading] = useState(false);
   const [blockers, setBlockers] = useState<
     { id: number; title: string; reason?: string }[]
   >([]);
@@ -70,11 +78,6 @@ export function Step2Scheduling() {
   const [unavailableDates, setUnavailableDates] = useState<string[]>([]);
   const [calendarLoading, setCalendarLoading] = useState(false);
   const [calendarError, setCalendarError] = useState("");
-
-  const timeToMinutes = (timeStr: string): number => {
-    const [h, m] = timeStr.split(":").map(Number);
-    return h * 60 + m;
-  };
 
   const formatTimeTo12Hour = (timeStr: string): string => {
     const [hourStr, minuteStr] = timeStr.split(":");
@@ -114,6 +117,9 @@ export function Step2Scheduling() {
   const apiMessage = apiResponse?.message;
   const hasNoAvailability = !loading && !!selectedDate && slots.length === 0;
   const unavailableDateSet = new Set(unavailableDates);
+  const selectedSlotSpan = getSelectedSlotSpan(selectedSlotWindows);
+  const selectedSlotMinutes = selectedSlotSpan?.slotMinutes ?? 0;
+  const selectedGapMinutes = selectedSlotSpan?.gapMinutes ?? 0;
 
   const isStartValid = (slotIndex: number): boolean => {
     if (slotIndex + minDuration > slots.length) return false;
@@ -123,42 +129,16 @@ export function Step2Scheduling() {
     return true;
   };
 
-  // Fixed slot selection handler - uses first item from selectedItems for pricing
-  const selectFixedSlot = async (slot: TimeSlot) => {
+  const formatDurationLabel = (minutes: number): string => {
+    const hours = minutes / 60;
+    return Number.isInteger(hours) ? `${hours}h` : `${hours.toFixed(1)}h`;
+  };
+
+  const selectFixedSlot = (slot: TimeSlot) => {
     if (!slot.available) return;
-
-    setStartTime(slot.start);
-    setEndTime(slot.end);
-
-    if (slot.override_price) {
-      setPricePreview(slot.override_price);
-    } else {
-      // ARRAY-ONLY: Always use fresh resource IDs
-      setPriceLoading(true);
-      try {
-        // Use the first explicit space for the deprecated leading-space field.
-        const firstSpaceId = selectedItems.find((i) => i.type === "space")
-          ? Number(selectedItems.find((i) => i.type === "space")!.id)
-          : 0;
-        const packageIds = useBookingStore.getState().getAllPackageIds();
-        const itemIds = selectedItems.map((item) => Number(item.id));
-
-        const pricing = await fetchPricing({
-          space_id: firstSpaceId,
-          date: selectedDate!,
-          start_time: slot.start,
-          item_ids: itemIds,
-          end_time: slot.end,
-          extras: [],
-          package_ids: packageIds,
-        });
-        setPricePreview(pricing.total_price);
-      } catch (e) {
-        console.error("Price preview failed:", e);
-      } finally {
-        setPriceLoading(false);
-      }
-    }
+    setSelectedSlotWindows(
+      updateContiguousSlotSelection(slots, selectedSlotWindows, slot),
+    );
   };
 
   // Auto-set first valid end time (>= minDuration) when start changes (SKIP for fixed slots)
@@ -191,6 +171,23 @@ export function Step2Scheduling() {
       setIsMapReady(true);
     }
   }, []);
+
+  useEffect(() => {
+    if (!hasFixedSlots || selectedSlotWindows.length === 0) {
+      return;
+    }
+
+    const selectionStillAvailable = selectedSlotWindows.every((selectedSlot) =>
+      slots.some(
+        (slot) =>
+          slot.available && isSelectedSlotWindowMatch(selectedSlot, slot),
+      ),
+    );
+
+    if (!selectionStillAvailable) {
+      setSelectedSlotWindows([]);
+    }
+  }, [hasFixedSlots, selectedSlotWindows, setSelectedSlotWindows, slots]);
 
   useEffect(() => {
     if (!selectedDate) {
@@ -443,7 +440,11 @@ export function Step2Scheduling() {
           {hasFixedSlots ? (
             /* FIXED SLOTS MODE: Card list */
             <div className="sb-field">
-              <label className="sb-label">Available Time Slots</label>
+                <label className="sb-label">Available Time Slots</label>
+                <p className="sb-hint">
+                  Click adjacent available slots to grow one continuous booking
+                  window.
+                </p>
               <div
                 className="sb-slot-list"
                 style={{
@@ -455,7 +456,13 @@ export function Step2Scheduling() {
                 {slots.map((slot) => (
                   <button
                     key={slot.slot_id || slot.start}
-                    className={`sb-slot sb-slot--card ${!slot.available ? "sb-slot--invalid" : ""} ${selectedStartTime === slot.start ? "sb-slot--selected" : ""}`}
+                    className={`sb-slot sb-slot--card ${!slot.available ? "sb-slot--invalid" : ""} ${
+                      selectedSlotWindows.some((selectedSlot) =>
+                        isSelectedSlotWindowMatch(selectedSlot, slot),
+                      )
+                        ? "sb-slot--selected"
+                        : ""
+                    }`}
                     onClick={() => selectFixedSlot(slot)}
                     disabled={!slot.available}
                     style={{
@@ -539,6 +546,56 @@ export function Step2Scheduling() {
                   </button>
                 ))}
               </div>
+              {selectedSlotSpan && (
+                <div className="sb-slot-window-summary">
+                  <div className="sb-slot-window-summary__eyebrow">
+                    Selected booking window
+                  </div>
+                  <div className="sb-slot-window-summary__time">
+                    {formatTimeTo12Hour(selectedSlotSpan.startTime)} -{" "}
+                    {formatTimeTo12Hour(selectedSlotSpan.endTime)}
+                  </div>
+                  <div className="sb-slot-window-summary__meta">
+                    {selectedSlotWindows.length} selected{" "}
+                    {selectedSlotWindows.length === 1 ? "slot" : "slots"} |{" "}
+                    {formatDurationLabel(selectedSlotSpan.totalMinutes)}
+                  </div>
+                  <ul className="sb-slot-window-list">
+                    {selectedSlotWindows.map((selectedSlot) => (
+                      <li
+                        key={selectedSlot.slotId}
+                        className="sb-slot-window-list__item"
+                      >
+                        <span>
+                          {formatTimeTo12Hour(selectedSlot.start)} -{" "}
+                          {formatTimeTo12Hour(selectedSlot.end)}
+                        </span>
+                        <span>
+                          {formatDurationLabel(
+                            timeToMinutes(selectedSlot.end) -
+                              timeToMinutes(selectedSlot.start),
+                          )}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  {selectedGapMinutes > 0 && (
+                    <p className="sb-slot-window-summary__note">
+                      Includes{" "}
+                      {formatDurationLabel(selectedGapMinutes)} between the
+                      selected slots, reserved as part of the booking window.
+                    </p>
+                  )}
+                  {selectedSlotMinutes > 0 &&
+                    selectedSlotMinutes !== selectedSlotSpan.totalMinutes && (
+                      <p className="sb-slot-window-summary__note">
+                        Slot time: {formatDurationLabel(selectedSlotMinutes)} |
+                        Reserved window:{" "}
+                        {formatDurationLabel(selectedSlotSpan.totalMinutes)}
+                      </p>
+                    )}
+                </div>
+              )}
             </div>
           ) : (
             /* LEGACY DYNAMIC GRID MODE */
