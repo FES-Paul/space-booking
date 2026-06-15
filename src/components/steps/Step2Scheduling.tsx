@@ -115,7 +115,8 @@ export function Step2Scheduling() {
   const hasFixedSlots =
     apiResponse?.has_fixed_slots ?? slots.some((s) => s.slot_id);
   const apiMessage = apiResponse?.message;
-  const hasNoAvailability = !loading && !!selectedDate && slots.length === 0;
+  const hasSelectableSlots = slots.some((slot) => slot.available);
+  const hasNoAvailability = !loading && !!selectedDate && !hasSelectableSlots;
   const unavailableDateSet = new Set(unavailableDates);
   const selectedSlotSpan = getSelectedSlotSpan(selectedSlotWindows);
   const selectedSlotMinutes = selectedSlotSpan?.slotMinutes ?? 0;
@@ -428,7 +429,7 @@ export function Step2Scheduling() {
 
           {!selectedDate && (
             <div className="sb-schedule-placeholder">
-              Select a date to see the available booking slots.
+              Select a date to see the booking time slots.
             </div>
           )}
 
@@ -440,10 +441,10 @@ export function Step2Scheduling() {
           {hasFixedSlots ? (
             /* FIXED SLOTS MODE: Card list */
             <div className="sb-field">
-                <label className="sb-label">Available Time Slots</label>
+                <label className="sb-label">Time Slots</label>
                 <p className="sb-hint">
-                  Click adjacent available slots to grow one continuous booking
-                  window.
+                  Booked slots stay visible. Only adjacent available slots can
+                  be selected together in one continuous booking window.
                 </p>
               <div
                 className="sb-slot-list"

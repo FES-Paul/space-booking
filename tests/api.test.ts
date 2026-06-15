@@ -309,6 +309,53 @@ describe("Availability Logic - Frontend Behavior", () => {
     expect(result.slots[0].slot_id).toBe("slot_1");
     expect(result.slots[1].available).toBe(false);
   });
+
+  it("should preserve booked fixed slots in the returned timeline", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          date: "2026-05-10",
+          space_ids: [224, 225],
+          is_multi: true,
+          is_intersection: true,
+          slots: [
+            {
+              slot_id: "slot_1",
+              start: "09:30",
+              end: "11:30",
+              available: true,
+              has_pending: false,
+            },
+            {
+              slot_id: "slot_2",
+              start: "12:30",
+              end: "14:30",
+              available: false,
+              has_pending: false,
+            },
+            {
+              slot_id: "slot_3",
+              start: "18:30",
+              end: "20:30",
+              available: true,
+              has_pending: false,
+            },
+          ],
+          has_fixed_slots: true,
+          is_fixed_slots: true,
+        }),
+    });
+
+    const result = await fetchMultiAvailability([224, 225], "2026-05-10");
+
+    expect(result.slots.map((slot) => slot.slot_id)).toEqual([
+      "slot_1",
+      "slot_2",
+      "slot_3",
+    ]);
+    expect(result.slots[1].available).toBe(false);
+  });
 });
 
 describe("API Response Handling", () => {

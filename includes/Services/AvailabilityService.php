@@ -106,15 +106,7 @@ final class AvailabilityService
 		$global_slot_blockers = $global_slot_result['blockers'];
 		error_log('AVAIL INTERSECTION: Raw slots count: ' . count($raw_slots));
 
-		$has_blocked = false;
-		foreach ($raw_slots as $slot) {
-			if (empty($slot['available'])) {
-				$has_blocked = true;
-				break;
-			}
-		}
-
-		if (count($all_space_ids_to_check) === 1 && $has_blocked) {
+		if (count($all_space_ids_to_check) === 1) {
 			$blocking_intervals = $this->repo->get_blocking_intervals($all_space_ids_to_check, $date);
 			$blockers = [];
 
@@ -134,16 +126,8 @@ final class AvailabilityService
 			}
 
 			return [
-				'slots' => array_values(array_filter($raw_slots, fn($s) => !empty($s['available']))),
-				'blockers' => array_values($blockers),
-				'is_intersection' => true
-			];
-		}
-
-		if (count($all_space_ids_to_check) === 1) {
-			return [
 				'slots' => $raw_slots,
-				'blockers' => $global_slot_blockers,
+				'blockers' => array_values($blockers),
 				'is_intersection' => false
 			];
 		}
@@ -185,41 +169,28 @@ final class AvailabilityService
 			}
 		}
 
-		if (!empty($blockers)) {
-			error_log("AVAIL INTERSECTION: RETURNING BLOCKERS - " . json_encode($blockers));
-			return [
-				'slots' => [],
-				'blockers' => $blockers,
-				'is_intersection' => true
-			];
+		// Build the full slot timeline from the first non-empty space so booked
+		// separators remain visible in the UI and break multi-select continuity.
+		$first_space_slots = [];
+		foreach ($all_space_ids_to_check as $space_id) {
+			if (!empty($per_space_slots[$space_id])) {
+				$first_space_slots = $per_space_slots[$space_id];
+				break;
+			}
 		}
 
-		// Find intersection: only slots that are available in ALL spaces
 		$common_slots = [];
-		
-		// Get the first space's available slots as base
-		$first_space_id = $all_space_ids_to_check[0];
-		$first_space_slots = $per_space_slots[$first_space_id];
-		
-		// Filter to only available slots in the first space
-		$available_in_first = array_filter($first_space_slots, function($slot) {
-			return !empty($slot['available']);
-		});
-		
-		foreach ($available_in_first as $first_slot) {
+		foreach ($first_space_slots as $first_slot) {
 			$slot_start = $first_slot['start'];
 			$slot_end = $first_slot['end'];
-			$slot_key = $slot_start . '-' . $slot_end;
-			
-			// Check if this slot is available in ALL other spaces
-			$is_available_in_all = true;
-			
+
+			$is_available_in_all = !empty($first_slot['available']);
+
 			for ($i = 1; $i < count($all_space_ids_to_check); $i++) {
 				$space_id = $all_space_ids_to_check[$i];
 				$space_has_slot = false;
 				$slot_available_in_space = false;
-				
-				// Find this exact time slot in the other space
+
 				foreach ($per_space_slots[$space_id] as $space_slot) {
 					if ($space_slot['start'] === $slot_start && $space_slot['end'] === $slot_end) {
 						$space_has_slot = true;
@@ -227,27 +198,26 @@ final class AvailabilityService
 						break;
 					}
 				}
-				
-				// If the slot doesn't exist in this space or isn't available, it's not in intersection
+
 				if (!$space_has_slot || !$slot_available_in_space) {
 					$is_available_in_all = false;
 					break;
 				}
 			}
-			
-			// Only include if available in ALL spaces
-			if ($is_available_in_all) {
-				$common_slots[] = $first_slot; // Use the first space's slot data as the master
-			}
+
+			$slot_copy = $first_slot;
+			$slot_copy['available'] = $is_available_in_all;
+			$common_slots[] = $slot_copy;
 		}
-		
-		error_log('SB_DEBUG: Common slots after intersection: ' . count($common_slots) . ' from ' . count($available_in_first) . ' available in first space');
+
+		error_log('SB_DEBUG: Common slot timeline after intersection: ' . count($common_slots));
 
 		$global_common_result = $this->apply_global_resource_blocking($common_slots, $date);
-		$common_slots = array_values(array_filter($global_common_result['slots'], fn($slot) => !empty($slot['available'])));
+		$common_slots = $global_common_result['slots'];
 		$global_common_blockers = $global_common_result['blockers'];
+		$available_common_count = count(array_filter($common_slots, fn($slot) => !empty($slot['available'])));
 
-		if (count($common_slots) > 0) {
+		if ($available_common_count > 0) {
 			foreach ($space_ids as $space_id) {
 				$already_blocked = false;
 				foreach ($blockers as $b) {
@@ -273,13 +243,13 @@ final class AvailabilityService
 			}
 		}
 
-		if (empty($blockers) && count($common_slots) === 0 && !empty($global_common_blockers)) {
+		if (empty($blockers) && $available_common_count === 0 && !empty($global_common_blockers)) {
 			$blockers = $global_common_blockers;
 		}
 
 		if (empty($blockers)) {
 			$min_available = min($available_counts);
-			if ($min_available > 0 && count($common_slots) === 0) {
+			if ($min_available > 0 && $available_common_count === 0) {
 				$min_count = $min_available;
 				foreach ($space_ids as $space_id) {
 					if ($available_counts[$space_id] === $min_count) {
@@ -295,7 +265,7 @@ final class AvailabilityService
 			}
 		}
 
-		error_log('AVAIL INTERSECTION: Found ' . count($common_slots) . ' common slots from ' . count($space_ids) . ' spaces');
+		error_log('AVAIL INTERSECTION: Found ' . $available_common_count . ' selectable slots from ' . count($space_ids) . ' spaces');
 
 		return [
 			'slots' => $common_slots,

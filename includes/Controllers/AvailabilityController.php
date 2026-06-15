@@ -192,6 +192,7 @@ final class AvailabilityController extends WP_REST_Controller
 		$slots = $result['slots'];
 		$blockers = $result['blockers'];
 		$is_intersection = $result['is_intersection'];
+		$has_available_slots = count(array_filter($slots, fn($slot) => !empty($slot['available']))) > 0;
 
 		// Determine has_fixed_slots from primary space
 		$primary_id = $resolved_space_ids[0] ?? 0;
@@ -219,7 +220,7 @@ final class AvailabilityController extends WP_REST_Controller
 				$message = 'There is no available time slot for the selected spaces. Reason: ' . implode(' and ', $blocker_names) . ' are currently booked.';
 			}
 			error_log('AVAIL CONTROLLER MULTI: Blocker message: ' . $message);
-		} else if ($is_intersection && empty($slots)) {
+		} else if ($is_intersection && !$has_available_slots) {
 			$message = 'No common time slots available for all selected spaces. Please choose different spaces or a different date.';
 		}
 
