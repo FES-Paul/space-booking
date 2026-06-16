@@ -320,18 +320,56 @@ export function Step1Selection() {
       </p>
 
       {/* Tabs */}
-      <div className="sb-tabs">
+      <div
+        className="sb-tabs"
+        role="tablist"
+        aria-label="Choose between booking spaces or packages"
+      >
         <button
-          className={`sb-tab ${tab === "space" ? "sb-tab--active" : ""}`}
+          type="button"
+          role="tab"
+          id="sb-tab-space"
+          aria-selected={tab === "space"}
+          aria-controls="sb-tab-panel-space"
+          className={`sb-tab sb-tab--space ${tab === "space" ? "sb-tab--active" : ""}`}
           onClick={() => setTab("space")}
         >
-          Spaces ({spaces.length})
+          <span className="sb-tab__icon" aria-hidden="true">
+            S
+          </span>
+          <span className="sb-tab__body">
+            <span className="sb-tab__eyebrow">Pick individually</span>
+            <span className="sb-tab__title-row">
+              <span className="sb-tab__label">Spaces</span>
+              <span className="sb-tab__count">{spaces.length}</span>
+            </span>
+            <span className="sb-tab__meta">
+              Browse single rooms and areas you can mix and match.
+            </span>
+          </span>
         </button>
         <button
-          className={`sb-tab ${tab === "package" ? "sb-tab--active" : ""}`}
+          type="button"
+          role="tab"
+          id="sb-tab-package"
+          aria-selected={tab === "package"}
+          aria-controls="sb-tab-panel-package"
+          className={`sb-tab sb-tab--package ${tab === "package" ? "sb-tab--active" : ""}`}
           onClick={() => setTab("package")}
         >
-          Packages ({packages.length})
+          <span className="sb-tab__icon" aria-hidden="true">
+            P
+          </span>
+          <span className="sb-tab__body">
+            <span className="sb-tab__eyebrow">Bundle offers</span>
+            <span className="sb-tab__title-row">
+              <span className="sb-tab__label">Packages</span>
+              <span className="sb-tab__count">{packages.length}</span>
+            </span>
+            <span className="sb-tab__meta">
+              Compare curated bundles that can include spaces and extras.
+            </span>
+          </span>
         </button>
       </div>
 
@@ -341,7 +379,12 @@ export function Step1Selection() {
 
       {/* Spaces */}
       {!loading && tab === "space" && (
-        <div className="sb-cards">
+        <div
+          className="sb-cards"
+          id="sb-tab-panel-space"
+          role="tabpanel"
+          aria-labelledby="sb-tab-space"
+        >
           {spaces.map((space) => renderCard(space, "space"))}
           {spaces.length === 0 && (
             <p className="sb-empty">No spaces available.</p>
@@ -351,7 +394,12 @@ export function Step1Selection() {
 
       {/* Packages */}
       {!loading && tab === "package" && (
-        <div className="sb-cards">
+        <div
+          className="sb-cards"
+          id="sb-tab-panel-package"
+          role="tabpanel"
+          aria-labelledby="sb-tab-package"
+        >
           {packages.map((pkg) => renderCard(pkg, "package"))}
           {packages.length === 0 && (
             <p className="sb-empty">No packages available.</p>

@@ -136,8 +136,8 @@ export function Step4PackageQuestions() {
             >
               <label style={{ display: "block", marginBottom: 6 }}>
                 {entry.field.label}{" "}
-                {entry.field.required ? <span style={{ color: "#d63638" }}>*</span> : null}
-                <span style={{ marginLeft: 8, color: "#666", fontSize: 12 }}>
+                {entry.field.required ? <span style={{ color: "var(--sb-primary)" }}>*</span> : null}
+                <span style={{ marginLeft: 8, color: "var(--sb-muted)", fontSize: 12 }}>
                   ({entry.packageTitle})
                 </span>
               </label>

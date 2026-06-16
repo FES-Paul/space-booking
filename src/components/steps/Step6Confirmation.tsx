@@ -553,7 +553,7 @@ export function Step6Confirmation() {
                           (e.quantity ?? 0) > 1 &&
                           ` × ${e.quantity}`}
                         {!e.isPackage && (e.unit_price ?? 0) > 0 && (
-                          <span style={{ color: "#666", fontSize: "0.9em" }}>
+                          <span style={{ color: "var(--sb-muted)", fontSize: "0.9em" }}>
                             {" "}
                             ({window.sbConfig.symbol}
                             {(e.unit_price ?? 0).toFixed(2)})
@@ -563,7 +563,7 @@ export function Step6Confirmation() {
                     ))}
                   </ul>
                 ) : (
-                  <span style={{ color: "#999", fontStyle: "italic" }}>
+                  <span style={{ color: "var(--sb-muted)", fontStyle: "italic" }}>
                     None
                   </span>
                 )}
@@ -593,11 +593,11 @@ export function Step6Confirmation() {
         <div
           className="sb-review-notice"
           style={{
-            background: "#d4edda",
+            background: "var(--sb-accent-light)",
             padding: "15px",
             borderRadius: "8px",
             margin: "20px 0",
-            borderLeft: "4px solid #28a745",
+            borderLeft: "4px solid var(--sb-accent)",
           }}
         >
           <strong>📋 Next Steps:</strong> Our team will review your booking

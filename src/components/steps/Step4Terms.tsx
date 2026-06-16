@@ -217,24 +217,24 @@ export function Step4Terms() {
               top: "50%",
               left: "50%",
               transform: "translate(-50%, -50%)",
-              background: "white",
+              background: "var(--sb-white)",
               padding: "32px",
               borderRadius: "12px",
-              boxShadow: "0 20px 40px rgba(0,0,0,0.3)",
+              boxShadow: "0 20px 40px rgba(96, 68, 113, 0.24)",
               maxWidth: "500px",
               width: "90%",
               zIndex: 10000,
               animation: "slideIn 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)",
             }}
           >
-            <h3 style={{ margin: "0 0 16px 0", color: "#333" }}>
+            <h3 style={{ margin: "0 0 16px 0", color: "var(--sb-text)" }}>
               Final Confirmation
             </h3>
             <p
               style={{
                 margin: "0 0 24px 0",
                 lineHeight: "1.6",
-                color: "#555",
+                color: "var(--sb-muted)",
                 fontSize: "16px",
               }}
             >

@@ -399,7 +399,7 @@ export function Step2Scheduling() {
           <span className="sb-calendar__legend-dot sb-calendar__legend-dot--open" />
           <span>Available</span>
           <span className="sb-calendar__legend-dot sb-calendar__legend-dot--full" />
-          <span>Fully booked</span>
+          <span className="sb-calendar__legend-label--full">Fully booked</span>
         </div>
         {calendarLoading && (
           <p className="sb-help sb-calendar__help">
@@ -457,7 +457,8 @@ export function Step2Scheduling() {
                 {slots.map((slot) => (
                   <button
                     key={slot.slot_id || slot.start}
-                    className={`sb-slot sb-slot--card ${!slot.available ? "sb-slot--invalid" : ""} ${
+                    type="button"
+                    className={`sb-slot sb-slot--card ${!slot.available ? "sb-slot--booked" : ""} ${
                       selectedSlotWindows.some((selectedSlot) =>
                         isSelectedSlotWindowMatch(selectedSlot, slot),
                       )
@@ -475,18 +476,15 @@ export function Step2Scheduling() {
                       alignItems: "center",
                     }}
                   >
-                    <div>
-                      <div style={{ fontWeight: "600", fontSize: "16px" }}>
+                    <div className="sb-slot__content">
+                      <div className="sb-slot__time">
                         {formatTimeTo12Hour(slot.start)} -{" "}
                         {formatTimeTo12Hour(slot.end)}
                       </div>
                       <div
-                        style={{
-                          color: slot.override_price
-                            ? "var(--sb-price)"
-                            : "var(--sb-muted)",
-                          fontSize: "14px",
-                        }}
+                        className={`sb-slot__meta ${
+                          slot.override_price ? "sb-slot__meta--override" : ""
+                        }`}
                       >
                         Duration:{" "}
                         {timeToMinutes(slot.end) - timeToMinutes(slot.start)}min
@@ -500,31 +498,15 @@ export function Step2Scheduling() {
                       </div>
                     </div>
 
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        justifyContent: "center",
-                        alignItems: "center",
-                        textDecoration: "normal",
-                      }}
-                    >
+                    <div className="sb-slot__status-group">
                       <div
-                        style={{
-                          fontSize: "12px",
-                          padding: "4px 8px",
-                          borderRadius: "4px",
-                          background: slot.has_pending
-                            ? "#fff3cd"
+                        className={`sb-slot__status ${
+                          slot.has_pending
+                            ? "sb-slot__status--pending"
                             : slot.available
-                              ? "#d4edda"
-                              : "#f8d7da",
-                          color: slot.has_pending
-                            ? "#856404"
-                            : slot.available
-                              ? "#155724"
-                              : "#721c24",
-                        }}
+                              ? "sb-slot__status--available"
+                              : "sb-slot__status--booked"
+                        }`}
                       >
                         {slot.has_pending
                           ? "Pending"
@@ -533,13 +515,7 @@ export function Step2Scheduling() {
                             : "Booked"}
                       </div>
                       {slot.has_pending && (
-                        <div
-                          style={{
-                            fontSize: "11px",
-                            color: "#856404",
-                            marginTop: "4px",
-                          }}
-                        >
+                        <div className="sb-slot__status-note">
                           Someone is currently booking this slot
                         </div>
                       )}
@@ -607,13 +583,16 @@ export function Step2Scheduling() {
                 <div className="sb-slot-grid">
                   {slots.map((slot, i) => {
                     const validStart = isStartValid(i);
-                    const isDisabled = !validStart || !slot.available;
+                    const isBooked = !slot.available;
+                    const isDisabled = !validStart || isBooked;
                     return (
                       <button
                         key={slot.start}
-                        className={`sb-slot ${isDisabled ? "sb-slot--invalid" : ""} ${selectedStartTime === slot.start ? "sb-slot--selected" : ""} ${slot.has_pending ? "sb-slot--pending" : ""}`}
+                        type="button"
+                        className={`sb-slot ${!validStart ? "sb-slot--invalid" : ""} ${isBooked ? "sb-slot--booked" : ""} ${selectedStartTime === slot.start ? "sb-slot--selected" : ""} ${slot.has_pending ? "sb-slot--pending" : ""}`}
+                        disabled={isDisabled}
                         onClick={
-                          validStart && slot.available
+                          validStart && !isBooked
                             ? () => setStartTime(slot.start)
                             : undefined
                         }
@@ -625,13 +604,7 @@ export function Step2Scheduling() {
                       >
                         {formatTimeTo12Hour(slot.start)}
                         {slot.has_pending && (
-                          <span
-                            style={{
-                              fontSize: "9px",
-                              display: "block",
-                              color: "#856404",
-                            }}
-                          >
+                          <span className="sb-slot__status-note sb-slot__status-note--inline">
                             Pending
                           </span>
                         )}
