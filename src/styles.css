@@ -37,33 +37,26 @@
   --sb-focus-outline: 2px solid rgba(96, 68, 113, 0.32);
 }
 
-/* Neutralize aggressive theme button defaults inside the plugin roots. */
-:is(#sb-booking-app, #sb-lookup-app) :where(
-    button,
-    input[type="button"],
-    input[type="submit"],
-    input[type="reset"],
-    .button,
-    .ast-button,
-    .ast-custom-button
+/* Override Astra's shared button skin only on plugin controls. */
+:is(#sb-booking-app, #sb-lookup-app) :is(
+    button.sb-btn,
+    button.sb-tab,
+    button.sb-slot,
+    .sb-calendar-shell .react-calendar__navigation button
   ) {
-  appearance: none;
-  -webkit-appearance: none;
-  margin: 0;
-  padding: 0;
-  min-height: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  background-image: none;
-  box-shadow: none;
+  border-style: solid;
+  border-top-width: 0;
+  border-right-width: 0;
+  border-bottom-width: 0;
+  border-left-width: 0;
+  border-color: transparent;
+  background-color: transparent;
   color: inherit;
-  font: inherit;
+  padding: 0;
+  font-family: inherit;
+  font-weight: inherit;
   font-size: inherit;
   line-height: inherit;
-  letter-spacing: inherit;
-  text-transform: none;
-  text-decoration: none;
 }
 
 :is(#sb-booking-app, #sb-lookup-app) :where(
