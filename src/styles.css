@@ -1166,6 +1166,10 @@ button.sb-slot.sb-slot--selected:focus .sb-slot__meta {
   box-shadow: 0 0 0 3px var(--sb-primary-light);
   color: var(--sb-primary);
 }
+.sb-slot:hover {
+  background-color: var(--sb-booked-bg);
+  color: var(--sb-booked-text);
+}
 
 .sb-slot:active:not(:disabled) {
   background: var(--sb-hover-bg);
