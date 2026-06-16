@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import { useBookingStore } from "@/store/bookingStore";
 import { formatBookingDate } from "@/utils/date";
+import {
+  formatConfirmationSelectedItemLabel,
+  formatTimeTo12Hour,
+  shouldShowConfirmationSelectedItems,
+} from "@/utils/bookingLabels";
 
 interface SelectedItem {
   id: number;
@@ -163,16 +168,6 @@ export function Step6Confirmation() {
       </div>
     );
   }
-
-  const formatTimeTo12Hour = (timeStr: string): string => {
-    const [hourStr, minuteStr] = timeStr.split(":");
-    let hour = parseInt(hourStr, 10);
-    const minutes = minuteStr;
-    const period = hour >= 12 ? "PM" : "AM";
-    hour = hour % 12;
-    if (hour === 0) hour = 12;
-    return `${hour}:${minutes} ${period}`;
-  };
 
   const getExtraTitle = (extraId: number, extra_name?: string) =>
     extra_name || `Extra #${extraId}`;
@@ -406,6 +401,10 @@ export function Step6Confirmation() {
   const packageQuestionRows = getPackageQuestionRows();
   const noteRows = getNoteRows();
   const formattedBookingDate = formatBookingDate(bookingData.booking_date);
+  const selectedItems = bookingData._selected_items ?? [];
+  const shouldShowSelectedItems = shouldShowConfirmationSelectedItems(
+    selectedItems,
+  );
 
   return (
     <div className="sb-step sb-step-6">
@@ -463,16 +462,19 @@ export function Step6Confirmation() {
               <th>Space</th>
               <td>{getSpaceSummaryLabel()}</td>
             </tr>
-            {bookingData._selected_items &&
-              bookingData._selected_items.length > 1 && (
+            {shouldShowSelectedItems && (
                 <tr>
                   <th>Selected Items</th>
                   <td>
                     <ul style={{ margin: 0, paddingLeft: "20px" }}>
-                      {bookingData._selected_items?.map((item) => (
-                        <li key={item.id}>
+                      {selectedItems.map((item) => (
+                        <li key={`${item.type}-${item.id}`}>
                           {item.type === "sb_package" ? "📦" : "🏠"}{" "}
-                          {item.title}
+                          {formatConfirmationSelectedItemLabel(
+                            item,
+                            bookingData.start_time,
+                            bookingData.end_time,
+                          )}
                         </li>
                       ))}
                     </ul>
