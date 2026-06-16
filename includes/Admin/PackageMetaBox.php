@@ -111,6 +111,9 @@ final class PackageMetaBox
                     $type = sanitize_text_field((string) ($field['type'] ?? 'text'));
                     $required = !empty($field['required']);
                     $allow_others = !empty($field['allow_others']);
+                    $others_label = $allow_others
+                        ? sanitize_text_field((string) ($field['others_label'] ?? 'Others'))
+                        : '';
                     $priced_options = !empty($field['priced_options']);
                     $options = isset($field['options']) && is_array($field['options']) ? $field['options'] : [];
                     $option_prices = isset($field['option_prices']) && is_array($field['option_prices']) ? $field['option_prices'] : [];
@@ -148,6 +151,13 @@ final class PackageMetaBox
                             </label>
                             <button type="button" class="button-link-delete sb-remove-theme-field"><?php esc_html_e('Remove', 'space-booking'); ?></button>
                         </div>
+                        <p class="sb-others-label-wrap" style="margin-top:10px;<?php echo (in_array($type, ['radio', 'checkbox', 'select'], true) && $allow_others) ? '' : 'display:none;'; ?>">
+                            <label><strong><?php esc_html_e('Others Label', 'space-booking'); ?></strong></label><br>
+                            <input type="text" name="sb_package_theme_meta_fields[<?php echo esc_attr((string) $index); ?>][others_label]" value="<?php echo esc_attr($others_label); ?>" class="regular-text" placeholder="Others">
+                            <span class="description" style="display:block;margin-top:4px;">
+                                <?php esc_html_e('This label is shown to customers for the free-text option. Leave it blank to keep "Others". If priced options are enabled, use the same label in Option Prices.', 'space-booking'); ?>
+                            </span>
+                        </p>
                         <p class="sb-options-wrap" style="margin-top:10px;<?php echo in_array($type, ['radio', 'checkbox', 'select'], true) ? '' : 'display:none;'; ?>">
                             <label><strong><?php esc_html_e('Options (one per line)', 'space-booking'); ?></strong></label><br>
                             <textarea name="sb_package_theme_meta_fields[<?php echo esc_attr((string) $index); ?>][options]" rows="4" class="large-text"><?php echo esc_textarea(implode("\n", array_map('sanitize_text_field', $options))); ?></textarea>
@@ -213,6 +223,13 @@ final class PackageMetaBox
                             </label>
                             <button type="button" class="button-link-delete sb-remove-theme-field">Remove</button>
                         </div>
+                        <p class="sb-others-label-wrap" style="margin-top:10px;display:none;">
+                            <label><strong>Others Label</strong></label><br>
+                            <input type="text" name="sb_package_theme_meta_fields[${index}][others_label]" class="regular-text" placeholder="Others">
+                            <span class="description" style="display:block;margin-top:4px;">
+                                This label is shown to customers for the free-text option. Leave it blank to keep "Others". If priced options are enabled, use the same label in Option Prices.
+                            </span>
+                        </p>
                         <p class="sb-options-wrap" style="margin-top:10px;display:none;">
                             <label><strong>Options (one per line)</strong></label><br>
                             <textarea name="sb_package_theme_meta_fields[${index}][options]" rows="4" class="large-text"></textarea>
@@ -228,13 +245,16 @@ final class PackageMetaBox
                     const typeEl = row.querySelector('.sb-answer-type');
                     const optionsWrap = row.querySelector('.sb-options-wrap');
                     const allowOthersWrap = row.querySelector('.sb-allow-others-wrap');
+                    const othersLabelWrap = row.querySelector('.sb-others-label-wrap');
                     const pricedOptionsWrap = row.querySelector('.sb-priced-options-wrap');
                     const pricedOptionsToggle = row.querySelector('.sb-priced-options-toggle');
                     const optionPricesWrap = row.querySelector('.sb-option-prices-wrap');
-                    if (!typeEl || !optionsWrap || !allowOthersWrap || !pricedOptionsWrap || !optionPricesWrap) return;
+                    if (!typeEl || !optionsWrap || !allowOthersWrap || !othersLabelWrap || !pricedOptionsWrap || !optionPricesWrap) return;
                     const showChoice = choiceTypes.includes(typeEl.value);
+                    const allowOthersToggle = allowOthersWrap.querySelector('input[type="checkbox"]');
                     optionsWrap.style.display = showChoice ? '' : 'none';
                     allowOthersWrap.style.display = showChoice ? '' : 'none';
+                    othersLabelWrap.style.display = showChoice && !!(allowOthersToggle && allowOthersToggle.checked) ? '' : 'none';
                     pricedOptionsWrap.style.display = showChoice ? '' : 'none';
                     const showPriceLines = showChoice && !!(pricedOptionsToggle && pricedOptionsToggle.checked);
                     optionPricesWrap.style.display = showPriceLines ? '' : 'none';
@@ -265,13 +285,7 @@ final class PackageMetaBox
                     if (!(target instanceof HTMLElement)) return;
                     const row = target.closest('.sb-package-field-row');
                     if (!row) return;
-                    if (target.classList.contains('sb-answer-type')) {
-                        syncVisibility(row);
-                        return;
-                    }
-                    if (target.classList.contains('sb-priced-options-toggle')) {
-                        syncVisibility(row);
-                    }
+                    syncVisibility(row);
                 });
 
                 builder.querySelectorAll('.sb-package-field-row').forEach((row) => syncVisibility(row));
@@ -350,6 +364,7 @@ final class PackageMetaBox
             $type = sanitize_text_field((string) ($field['type'] ?? 'text'));
             $required = !empty($field['required']);
             $allow_others = !empty($field['allow_others']);
+            $others_label = sanitize_text_field((string) ($field['others_label'] ?? ''));
             $priced_options = !empty($field['priced_options']);
 
             if ($label === '' || !in_array($type, self::ALLOWED_ANSWER_TYPES, true)) {
@@ -399,6 +414,7 @@ final class PackageMetaBox
                 }
             } else {
                 $allow_others = false;
+                $others_label = '';
                 $priced_options = false;
                 $option_prices = [];
             }
@@ -410,6 +426,9 @@ final class PackageMetaBox
                 'required' => $required,
                 'allow_others' => $allow_others,
             ];
+            if ($allow_others) {
+                $normalized['others_label'] = $others_label !== '' ? $others_label : 'Others';
+            }
 
             if (!empty($options)) {
                 $normalized['options'] = $options;

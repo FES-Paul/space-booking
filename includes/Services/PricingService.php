@@ -260,6 +260,8 @@ final class PricingService
 			if (empty($option_prices)) {
 				continue;
 			}
+			$others_label = sanitize_text_field((string) ($target_field['others_label'] ?? 'Others'));
+			$allows_others = !empty($target_field['allow_others']);
 
 			$value = $entry['value'] ?? null;
 			$selected_options = is_array($value) ? $value : [$value];
@@ -271,15 +273,34 @@ final class PricingService
 				if ($selected_label === '') {
 					continue;
 				}
-				$price_value = isset($option_prices[$selected_label]) ? (float) $option_prices[$selected_label] : 0.0;
+				$is_others_selected = $allows_others
+					&& (
+						strcasecmp($selected_label, $others_label) === 0
+						|| strcasecmp($selected_label, 'Others') === 0
+					);
+				$lookup_labels = [$selected_label];
+				if ($is_others_selected) {
+					$lookup_labels[] = $others_label;
+					$lookup_labels[] = 'Others';
+				}
+				$lookup_labels = array_values(array_unique(array_filter($lookup_labels)));
+				$price_value = 0.0;
+				foreach ($lookup_labels as $lookup_label) {
+					foreach ($option_prices as $option_label => $option_price) {
+						if (strcasecmp((string) $option_label, (string) $lookup_label) === 0) {
+							$price_value = (float) $option_price;
+							break 2;
+						}
+					}
+				}
 				if ($price_value <= 0) {
 					continue;
 				}
 				$display_option = $selected_label;
-				if (strtolower($selected_label) === 'others') {
+				if ($is_others_selected) {
 					$others_text = sanitize_text_field((string) ($entry['others_text'] ?? ''));
 					if ($others_text !== '') {
-						$display_option = 'Others (' . $others_text . ')';
+						$display_option = $selected_label . ' (' . $others_text . ')';
 					}
 				}
 				$total += $price_value;

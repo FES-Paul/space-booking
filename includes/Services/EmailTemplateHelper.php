@@ -65,7 +65,7 @@ final class EmailTemplateHelper
 			$html .= '<td style="padding:8px 0;width:38%;color:#555;font-size:13px;"><strong>' . esc_html($row['label']) . '</strong></td>';
 			$html .= '<td style="padding:8px 0;font-size:13px;">' . esc_html($row['value']);
 			if ($row['others_text'] !== '') {
-				$html .= '<br><span style="color:#666;font-size:12px;"><em>' . esc_html__('Others explanation:', 'space-booking') . '</em> ' . esc_html($row['others_text']) . '</span>';
+				$html .= '<br><span style="color:#666;font-size:12px;"><em>' . esc_html__('Details:', 'space-booking') . '</em> ' . esc_html($row['others_text']) . '</span>';
 			}
 			$html .= '</td>';
 			$html .= '</tr>';
@@ -75,4 +75,3 @@ final class EmailTemplateHelper
 		return $html;
 	}
 }
-

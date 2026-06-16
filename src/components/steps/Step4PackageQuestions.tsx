@@ -1,6 +1,10 @@
 import { useMemo, useState } from "react";
 import { useBookingStore } from "@/store/bookingStore";
 import type { PackageThemeMetaField, SelectionItem } from "@/types";
+import {
+  getPackageQuestionOthersLabel,
+  isPackageQuestionOthersSelected,
+} from "@/utils/packageQuestionAnswers";
 
 type SelectedPackageItem = Extract<SelectionItem, { type: "package" }>;
 
@@ -12,9 +16,6 @@ type PackageQuestionEntry = {
 
 const answerKeyFor = (packageId: number, fieldKey: string) =>
   `pkg_${packageId}__${fieldKey}`;
-
-const hasOthersSelected = (value: string | number | string[] | undefined): boolean =>
-  Array.isArray(value) ? value.includes("Others") : value === "Others";
 
 export function Step4PackageQuestions() {
   const {
@@ -41,11 +42,12 @@ export function Step4PackageQuestions() {
   }, [selectedItems]);
 
   const setValue = (
+    field: PackageThemeMetaField,
     key: string,
     value: string | number | string[],
     othersText?: string,
   ) => {
-    const othersSelected = hasOthersSelected(value);
+    const othersSelected = isPackageQuestionOthersSelected(field, value);
     setPackageQuestionAnswer(key, value, othersSelected ? othersText : "");
     setErrors((prev) => {
       const next = { ...prev };
@@ -75,12 +77,12 @@ export function Step4PackageQuestions() {
       const supportsOthers =
         !!entry.field.allow_others &&
         ["radio", "checkbox", "select"].includes(entry.field.type);
+      const othersLabel = getPackageQuestionOthersLabel(entry.field);
       const othersSelected =
-        supportsOthers &&
-        ((Array.isArray(value) && value.includes("Others")) || value === "Others");
+        supportsOthers && isPackageQuestionOthersSelected(entry.field, value);
       if (othersSelected && !String(existing?.others_text || "").trim()) {
         validationErrors[`${key}__others`] =
-          "Please describe your \"Others\" answer.";
+          `Please describe your "${othersLabel}" answer.`;
       }
     }
     setErrors(validationErrors);
@@ -108,6 +110,10 @@ export function Step4PackageQuestions() {
           const value = answer?.value;
           const type = entry.field.type;
           const options = Array.isArray(entry.field.options) ? entry.field.options : [];
+          const othersEnabled =
+            !!entry.field.allow_others &&
+            ["radio", "checkbox", "select"].includes(type);
+          const othersLabel = getPackageQuestionOthersLabel(entry.field);
           const optionPrices =
             entry.field.option_prices && typeof entry.field.option_prices === "object"
               ? entry.field.option_prices
@@ -117,16 +123,26 @@ export function Step4PackageQuestions() {
             ["radio", "checkbox", "select"].includes(type);
           const renderOptionLabel = (opt: string) => {
             if (!hasPricedOptions) return opt;
-            const amount = Number(optionPrices[opt] ?? 0);
+            const lookupLabels =
+              othersEnabled && opt === othersLabel
+                ? [opt, "Others"]
+                : [opt];
+            let amount = 0;
+            for (const lookupLabel of lookupLabels) {
+              const matchedEntry = Object.entries(optionPrices).find(
+                ([optionLabel]) =>
+                  optionLabel.toLowerCase() === lookupLabel.toLowerCase(),
+              );
+              if (matchedEntry) {
+                amount = Number(matchedEntry[1] ?? 0);
+                break;
+              }
+            }
             if (amount <= 0) return opt;
             return `${opt} (+${window.sbConfig.symbol}${amount.toFixed(2)})`;
           };
-          const othersEnabled =
-            !!entry.field.allow_others &&
-            ["radio", "checkbox", "select"].includes(type);
           const othersSelected =
-            othersEnabled &&
-            ((Array.isArray(value) && value.includes("Others")) || value === "Others");
+            othersEnabled && isPackageQuestionOthersSelected(entry.field, value);
 
           return (
             <div
@@ -147,14 +163,14 @@ export function Step4PackageQuestions() {
                   className="sb-input"
                   type="text"
                   value={String(value || "")}
-                  onChange={(e) => setValue(key, e.target.value)}
+                  onChange={(e) => setValue(entry.field, key, e.target.value)}
                 />
               )}
               {type === "textarea" && (
                 <textarea
                   className="sb-input"
                   value={String(value || "")}
-                  onChange={(e) => setValue(key, e.target.value)}
+                  onChange={(e) => setValue(entry.field, key, e.target.value)}
                   style={{ minHeight: 90 }}
                 />
               )}
@@ -163,14 +179,14 @@ export function Step4PackageQuestions() {
                   className="sb-input"
                   type="number"
                   value={String(value || "")}
-                  onChange={(e) => setValue(key, e.target.value)}
+                  onChange={(e) => setValue(entry.field, key, e.target.value)}
                 />
               )}
               {type === "select" && (
                 <select
                   className="sb-input"
                   value={String(value || "")}
-                  onChange={(e) => setValue(key, e.target.value)}
+                  onChange={(e) => setValue(entry.field, key, e.target.value)}
                 >
                   <option value="">Select an option</option>
                   {options.map((opt) => (
@@ -179,8 +195,8 @@ export function Step4PackageQuestions() {
                     </option>
                   ))}
                   {othersEnabled && (
-                    <option value="Others">
-                      {hasPricedOptions ? renderOptionLabel("Others") : "Others"}
+                    <option value={othersLabel}>
+                      {hasPricedOptions ? renderOptionLabel(othersLabel) : othersLabel}
                     </option>
                   )}
                 </select>
@@ -194,7 +210,7 @@ export function Step4PackageQuestions() {
                         name={key}
                         checked={value === opt}
                         onChange={() =>
-                          setValue(key, opt, answer?.others_text || "")
+                          setValue(entry.field, key, opt, answer?.others_text || "")
                         }
                       />{" "}
                       {renderOptionLabel(opt)}
@@ -205,10 +221,10 @@ export function Step4PackageQuestions() {
                       <input
                         type="radio"
                         name={key}
-                        checked={value === "Others"}
-                        onChange={() => setValue(key, "Others")}
+                        checked={value === othersLabel}
+                        onChange={() => setValue(entry.field, key, othersLabel)}
                       />{" "}
-                      {hasPricedOptions ? renderOptionLabel("Others") : "Others"}
+                      {hasPricedOptions ? renderOptionLabel(othersLabel) : othersLabel}
                     </label>
                   )}
                 </div>
@@ -228,7 +244,7 @@ export function Step4PackageQuestions() {
                             const next = e.target.checked
                               ? [...current, opt]
                               : current.filter((v) => v !== opt);
-                            setValue(key, next, answer?.others_text || "");
+                            setValue(entry.field, key, next, answer?.others_text || "");
                           }}
                         />{" "}
                         {renderOptionLabel(opt)}
@@ -239,16 +255,16 @@ export function Step4PackageQuestions() {
                     <label style={{ display: "block", marginBottom: 6 }}>
                       <input
                         type="checkbox"
-                        checked={Array.isArray(value) ? value.includes("Others") : false}
+                        checked={Array.isArray(value) ? value.includes(othersLabel) : false}
                         onChange={(e) => {
                           const current = Array.isArray(value) ? value : [];
                           const next = e.target.checked
-                            ? [...current, "Others"]
-                            : current.filter((v) => v !== "Others");
-                          setValue(key, next, answer?.others_text || "");
+                            ? [...current, othersLabel]
+                            : current.filter((v) => v !== othersLabel);
+                          setValue(entry.field, key, next, answer?.others_text || "");
                         }}
                       />{" "}
-                      {hasPricedOptions ? renderOptionLabel("Others") : "Others"}
+                      {hasPricedOptions ? renderOptionLabel(othersLabel) : othersLabel}
                     </label>
                   )}
                 </div>
@@ -262,7 +278,9 @@ export function Step4PackageQuestions() {
                   <textarea
                     className="sb-input"
                     value={String(answer?.others_text || "")}
-                    onChange={(e) => setValue(key, answer?.value || "", e.target.value)}
+                    onChange={(e) =>
+                      setValue(entry.field, key, answer?.value || "", e.target.value)
+                    }
                     style={{ minHeight: 90 }}
                   />
                   {errors[`${key}__others`] && (

@@ -6,6 +6,7 @@ import {
   formatTimeTo12Hour,
   shouldShowConfirmationSelectedItems,
 } from "@/utils/bookingLabels";
+import { formatPackageQuestionAnswerSummary } from "@/utils/packageQuestionAnswers";
 
 interface SelectedItem {
   id: number;
@@ -359,12 +360,12 @@ export function Step6Confirmation() {
         if (typeof value === "string" && value.trim() === "") return null;
         if (Array.isArray(value) && value.length === 0) return null;
         const valueText = Array.isArray(value)
-          ? value.join(", ")
+          ? value
           : String(value);
         const others = String(item.others_text || "").trim();
         return {
           label,
-          value: others ? `${valueText} | Others: ${others}` : valueText,
+          value: formatPackageQuestionAnswerSummary(valueText, others),
         };
       })
       .filter((row): row is { label: string; value: string } => !!row);

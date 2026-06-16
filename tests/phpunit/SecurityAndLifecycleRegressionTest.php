@@ -88,6 +88,7 @@ final class SecurityAndLifecycleRegressionTest extends TestCase
         $this->assertStringContainsString('_sb_package_theme_meta_fields', $contents);
         $this->assertStringContainsString('ALLOWED_ANSWER_TYPES', $contents, 'Answer type allow-list should exist.');
         $this->assertStringContainsString('Allow "Others" option', $contents, 'Admin builder should support Others toggle.');
+        $this->assertStringContainsString('others_label', $contents, 'Admin builder should support custom Others labels.');
         $this->assertStringContainsString('sanitize_theme_meta_fields', $contents, 'Theme meta fields should be sanitized on save.');
     }
 
@@ -161,8 +162,10 @@ final class SecurityAndLifecycleRegressionTest extends TestCase
     public function test_package_questions_qa_checklist_contracts_across_booking_views(): void
     {
         $step5Payment = (string) file_get_contents($this->pluginRoot . '/src/components/steps/Step5Payment.tsx');
+        $step4PackageQuestions = (string) file_get_contents($this->pluginRoot . '/src/components/steps/Step4PackageQuestions.tsx');
         $step4Terms = (string) file_get_contents($this->pluginRoot . '/src/components/steps/Step4Terms.tsx');
         $step6Confirmation = (string) file_get_contents($this->pluginRoot . '/src/components/steps/Step6Confirmation.tsx');
+        $questionHelpers = (string) file_get_contents($this->pluginRoot . '/src/utils/packageQuestionAnswers.ts');
         $adminEdit = (string) file_get_contents($this->pluginRoot . '/templates/admin/page-booking-edit.php');
         $wooIntegration = (string) file_get_contents($this->pluginRoot . '/includes/Integrations/WooCommerceIntegration.php');
         $emailHelper = (string) file_get_contents($this->pluginRoot . '/includes/Services/EmailTemplateHelper.php');
@@ -197,11 +200,13 @@ final class SecurityAndLifecycleRegressionTest extends TestCase
         $this->assertStringContainsString('package_answer_rows', $adminEmailTemplate);
         $this->assertStringContainsString('package_answer_rows', $customerEmailTemplate);
 
-        // 4) Others selected should appear consistently.
-        $this->assertStringContainsString('Others:', $step5Payment);
-        $this->assertStringContainsString('Others:', $step6Confirmation);
-        $this->assertStringContainsString('Others explanation:', $adminEdit);
-        $this->assertStringContainsString('Others explanation:', $emailHelper);
+        // 4) Custom others labels should appear consistently.
+        $this->assertStringContainsString('getPackageQuestionOthersLabel', $step4PackageQuestions);
+        $this->assertStringContainsString('formatPackageQuestionAnswerSummary', $step5Payment);
+        $this->assertStringContainsString('formatPackageQuestionAnswerSummary', $step6Confirmation);
+        $this->assertStringContainsString('Details:', $questionHelpers);
+        $this->assertStringContainsString('Details:', $adminEdit);
+        $this->assertStringContainsString('Details:', $emailHelper);
 
         // 5) Multi-package readability: answers are tied to package identity.
         $this->assertStringContainsString('${field.label} (${pkg.title})', $step5Payment);

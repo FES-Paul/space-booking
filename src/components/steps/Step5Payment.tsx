@@ -4,6 +4,10 @@ import { checkCartHasBooking, createBooking, fetchPricing } from "@/utils/api";
 import { formatBookingDate } from "@/utils/date";
 import type { Package, Space, SelectionItem } from "@/types";
 import { getSelectedSlotSpan, timeToMinutes } from "@/utils/slotSelection";
+import {
+  formatPackageQuestionAnswerSummary,
+  isPackageQuestionOthersSelected,
+} from "@/utils/packageQuestionAnswers";
 
 type SelectedPackageItem = Extract<SelectionItem, { type: "package" }>;
 
@@ -106,9 +110,7 @@ export function Step5Payment() {
                 value === "" ||
                 (Array.isArray(value) && value.length === 0);
               if (isEmpty) return null;
-              const othersSelected = Array.isArray(value)
-                ? value.includes("Others")
-                : value === "Others";
+              const othersSelected = isPackageQuestionOthersSelected(field, value);
               return {
                 package_id: Number(pkg.id),
                 field_key: field.key,
@@ -165,9 +167,7 @@ export function Step5Payment() {
           value === "" ||
           (Array.isArray(value) && value.length === 0);
         if (isEmpty) return;
-        const othersSelected = Array.isArray(value)
-          ? value.includes("Others")
-          : value === "Others";
+        const othersSelected = isPackageQuestionOthersSelected(field, value);
 
         payload.push({
           package_id: Number(pkg.id),
@@ -201,15 +201,13 @@ export function Step5Payment() {
           rawValue === "" ||
           (Array.isArray(rawValue) && rawValue.length === 0);
         if (isEmpty) return;
-        const renderedValue = Array.isArray(rawValue) ? rawValue.join(", ") : String(rawValue);
-        const othersSelected = Array.isArray(rawValue)
-          ? rawValue.includes("Others")
-          : rawValue === "Others";
-        const suffix =
-          othersSelected && answer.others_text ? ` | Others: ${String(answer.others_text)}` : "";
+        const othersSelected = isPackageQuestionOthersSelected(field, rawValue);
         rows.push({
           label: `${field.label} (${pkg.title})`,
-          value: `${renderedValue}${suffix}`,
+          value: formatPackageQuestionAnswerSummary(
+            rawValue,
+            othersSelected ? answer.others_text : undefined,
+          ),
         });
       });
     });

@@ -510,7 +510,7 @@ if (!empty($audit_log_entries)) {
                         <div><?php echo esc_html($row['value']); ?></div>
                         <?php if ($row['others_text'] !== ''): ?>
                         <div style="margin-top:4px;color:#50575e;">
-                            <em>Others explanation:</em> <?php echo esc_html($row['others_text']); ?>
+                            <em>Details:</em> <?php echo esc_html($row['others_text']); ?>
                         </div>
                         <?php endif; ?>
                     </li>

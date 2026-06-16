@@ -62,6 +62,7 @@ export interface PackageThemeMetaField {
   type: "text" | "textarea" | "number" | "radio" | "checkbox" | "select";
   required?: boolean;
   allow_others?: boolean;
+  others_label?: string;
   options?: string[];
   priced_options?: boolean;
   option_prices?: Record<string, number>;
