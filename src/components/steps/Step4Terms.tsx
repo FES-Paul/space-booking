@@ -239,8 +239,7 @@ export function Step4Terms() {
               }}
             >
               By proceeding, you acknowledge that you have read and fully
-              understood the terms of this policy because you will be held
-              liable.
+              understood the terms of this policy because <strong>YOU WILL BE HELD LIABLE</strong>.
             </p>
 
             <div
