@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useBookingStore } from "@/store/bookingStore";
 import { fetchExtras, fetchPricing } from "@/utils/api";
-import { formatPackagePreviewLabel } from "@/utils/bookingLabels";
+import { formatPreviewBreakdownLabel } from "@/utils/bookingLabels";
 import type { Extra, Package, PricingResponse } from "@/types";
 
 interface PreviewItem {
@@ -55,7 +55,7 @@ export function Step3Addons() {
   const selectedPackages = selectedItems.filter(
     (item) => item.type === "package",
   ) as Package[];
-  const selectedPackageTitles = selectedPackages.map((pkg) => pkg.title);
+  const selectedItemTitles = selectedItems.map((item) => item.title);
 
   useEffect(() => {
     if (!spaceId || !selectedDate || !selectedStartTime || !selectedEndTime) {
@@ -230,9 +230,9 @@ export function Step3Addons() {
                 className={`sb-breakdown__item ${item.label.includes("(Package Inclusion)") ? "package-inclusion" : ""}`}
               >
                 <span>
-                  {formatPackagePreviewLabel(
+                  {formatPreviewBreakdownLabel(
                     item.label,
-                    selectedPackageTitles,
+                    selectedItemTitles,
                     selectedStartTime,
                     selectedEndTime,
                   )}

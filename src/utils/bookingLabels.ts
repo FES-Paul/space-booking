@@ -4,6 +4,8 @@ type BookingLabelItem = {
   title?: string;
 };
 
+const LABEL_TIME_RANGE_PATTERN = /\((\d{1,2}:\d{2})\s*[–-]\s*(\d{1,2}:\d{2})\)/;
+
 export function formatTimeTo12Hour(timeStr: string): string {
   const value = timeStr.trim();
   const match = /^(\d{1,2}):(\d{2})/.exec(value);
@@ -31,22 +33,34 @@ export function formatBookingTimeRangeLabel(
   return `(${formatTimeTo12Hour(start)} - ${formatTimeTo12Hour(end)})`;
 }
 
-export function formatPackagePreviewLabel(
+function normalizeLabelTimeRange(label: string): string {
+  return label.replace(
+    LABEL_TIME_RANGE_PATTERN,
+    (_match, startTime: string, endTime: string) =>
+      formatBookingTimeRangeLabel(startTime, endTime),
+  );
+}
+
+export function formatPreviewBreakdownLabel(
   label: string,
-  selectedPackageTitles: string[],
+  selectedItemTitles: string[],
   startTime: string,
   endTime: string,
 ): string {
-  const normalizedLabel = label.trim();
-  const isSelectedPackage = selectedPackageTitles.some(
+  const normalizedLabel = normalizeLabelTimeRange(label.trim());
+  if (normalizedLabel !== label.trim()) {
+    return normalizedLabel;
+  }
+
+  const isSelectedItem = selectedItemTitles.some(
     (title) => title.trim() === normalizedLabel,
   );
-  if (!isSelectedPackage) return label;
+  if (!isSelectedItem) return normalizedLabel;
 
   const timeRangeLabel = formatBookingTimeRangeLabel(startTime, endTime);
-  if (!timeRangeLabel) return label;
+  if (!timeRangeLabel) return normalizedLabel;
 
-  return `${label} ${timeRangeLabel}`;
+  return `${normalizedLabel} ${timeRangeLabel}`;
 }
 
 export function shouldShowConfirmationSelectedItems(
@@ -62,7 +76,6 @@ export function formatConfirmationSelectedItemLabel(
 ): string {
   const title = item.title?.trim() || "";
   if (!title) return "";
-  if (item.type !== "sb_package") return title;
 
   const timeRangeLabel = formatBookingTimeRangeLabel(startTime, endTime);
   if (!timeRangeLabel) return title;

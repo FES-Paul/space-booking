@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatConfirmationSelectedItemLabel,
-  formatPackagePreviewLabel,
+  formatPreviewBreakdownLabel,
   formatTimeTo12Hour,
   shouldShowConfirmationSelectedItems,
 } from "@/utils/bookingLabels";
@@ -12,9 +12,9 @@ describe("bookingLabels", () => {
     expect(formatTimeTo12Hour("13:15")).toBe("1:15 PM");
   });
 
-  it("adds a time suffix only to selected package preview labels", () => {
+  it("formats preview labels with AM/PM for selected items and embedded ranges", () => {
     expect(
-      formatPackagePreviewLabel(
+      formatPreviewBreakdownLabel(
         "Birthday Package",
         ["Birthday Package"],
         "09:30",
@@ -23,13 +23,13 @@ describe("bookingLabels", () => {
     ).toBe("Birthday Package (9:30 AM - 11:30 AM)");
 
     expect(
-      formatPackagePreviewLabel(
-        "Main Hall (Package Inclusion)",
-        ["Birthday Package"],
+      formatPreviewBreakdownLabel(
+        "Main Hall (09:30–11:30)",
+        ["Main Hall"],
         "09:30",
         "11:30",
       ),
-    ).toBe("Main Hall (Package Inclusion)");
+    ).toBe("Main Hall (9:30 AM - 11:30 AM)");
   });
 
   it("shows confirmation selected items for package-only bookings", () => {
@@ -46,7 +46,7 @@ describe("bookingLabels", () => {
     ).toBe(false);
   });
 
-  it("adds the booking time suffix only to confirmation package labels", () => {
+  it("adds the booking time suffix to confirmation item labels", () => {
     expect(
       formatConfirmationSelectedItemLabel(
         { id: 55, type: "sb_package", title: "Birthday Package" },
@@ -61,6 +61,6 @@ describe("bookingLabels", () => {
         "09:30",
         "11:30",
       ),
-    ).toBe("Main Hall");
+    ).toBe("Main Hall (9:30 AM - 11:30 AM)");
   });
 });
