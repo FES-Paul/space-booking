@@ -4,11 +4,7 @@ import "react-calendar/dist/Calendar.css";
 import { useBookingStore } from "@/store/bookingStore";
 import { fetchMonthAvailability, fetchMultiAvailability } from "@/utils/api";
 import { formatBookingDate } from "@/utils/date";
-import type {
-  AvailabilityResponse,
-  Package,
-  TimeSlot,
-} from "@/types";
+import type { AvailabilityResponse, Package, TimeSlot } from "@/types";
 import {
   getSelectedSlotSpan,
   isSelectedSlotWindowMatch,
@@ -350,68 +346,71 @@ export function Step2Scheduling() {
         <div className="sb-schedule-panel sb-schedule-panel--calendar">
           <div className="sb-field">
             <div className="sb-label">Date</div>
-        <div className="sb-calendar-shell">
-          <Calendar
-            activeStartDate={parseDateValue(`${calendarMonth}-01`) ?? todayDate}
-            formatShortWeekday={(_locale, date) =>
-              date
-                .toLocaleDateString("en-US", { weekday: "short" })
-                .slice(0, 2)
-                .toUpperCase()
-            }
-            minDate={todayDate}
-            next2Label={null}
-            onActiveStartDateChange={({ activeStartDate, view }) => {
-              if (view === "month" && activeStartDate) {
-                setCalendarMonth(formatMonthValue(activeStartDate));
-              }
-            }}
-            onChange={(value) => {
-              if (value instanceof Date) {
-                setDate(formatDateValue(value));
-              }
-            }}
-            prev2Label={null}
-            showNeighboringMonth={false}
-            tileClassName={({ date, view }) => {
-              if (view !== "month") {
-                return undefined;
-              }
+            <div className="sb-calendar-shell">
+              <Calendar
+                activeStartDate={
+                  parseDateValue(`${calendarMonth}-01`) ?? todayDate
+                }
+                formatShortWeekday={(_locale, date) =>
+                  date
+                    .toLocaleDateString("en-US", { weekday: "short" })
+                    .slice(0, 2)
+                    .toUpperCase()
+                }
+                minDate={todayDate}
+                next2Label={null}
+                onActiveStartDateChange={({ activeStartDate, view }) => {
+                  if (view === "month" && activeStartDate) {
+                    setCalendarMonth(formatMonthValue(activeStartDate));
+                  }
+                }}
+                onChange={(value) => {
+                  if (value instanceof Date) {
+                    setDate(formatDateValue(value));
+                  }
+                }}
+                prev2Label={null}
+                showNeighboringMonth={false}
+                tileClassName={({ date, view }) => {
+                  if (view !== "month") {
+                    return undefined;
+                  }
 
-              const dateKey = formatDateValue(date);
-              if (unavailableDateSet.has(dateKey)) {
-                return "sb-calendar__day sb-calendar__day--unavailable";
-              }
+                  const dateKey = formatDateValue(date);
+                  if (unavailableDateSet.has(dateKey)) {
+                    return "sb-calendar__day sb-calendar__day--unavailable";
+                  }
 
-              return "sb-calendar__day";
-            }}
-            tileDisabled={({ date, view }) => {
-              if (view !== "month") {
-                return false;
-              }
+                  return "sb-calendar__day";
+                }}
+                tileDisabled={({ date, view }) => {
+                  if (view !== "month") {
+                    return false;
+                  }
 
-              return unavailableDateSet.has(formatDateValue(date));
-            }}
-            value={selectedDate ? parseDateValue(selectedDate) : null}
-          />
-        </div>
-        <div className="sb-calendar__legend">
-          <span className="sb-calendar__legend-dot sb-calendar__legend-dot--open" />
-          <span>Available</span>
-          <span className="sb-calendar__legend-dot sb-calendar__legend-dot--full" />
-          <span className="sb-calendar__legend-label--full">Fully booked</span>
-        </div>
-        {calendarLoading && (
-          <p className="sb-help sb-calendar__help">
-            Checking fully booked dates...
-          </p>
-        )}
-        {calendarError && (
-          <p className="sb-error sb-error--mt">{calendarError}</p>
-        )}
-      </div>
-
+                  return unavailableDateSet.has(formatDateValue(date));
+                }}
+                value={selectedDate ? parseDateValue(selectedDate) : null}
+              />
+            </div>
+            <div className="sb-calendar__legend">
+              <span className="sb-calendar__legend-dot sb-calendar__legend-dot--open" />
+              <span>Available</span>
+              <span className="sb-calendar__legend-dot sb-calendar__legend-dot--full" />
+              <span className="sb-calendar__legend-label--full">
+                Fully booked
+              </span>
+            </div>
+            {calendarLoading && (
+              <p className="sb-help sb-calendar__help">
+                Checking fully booked dates...
+              </p>
+            )}
+            {calendarError && (
+              <p className="sb-error sb-error--mt">{calendarError}</p>
+            )}
           </div>
+        </div>
 
         <div className="sb-schedule-panel sb-schedule-panel--details">
           <div className="sb-schedule-summary">
@@ -433,280 +432,291 @@ export function Step2Scheduling() {
             </div>
           )}
 
-          {loading && <div className="sb-loading">Checking availability...</div>}
-      {error && <div className="sb-error">{error}</div>}
+          {loading && (
+            <div className="sb-loading">Checking availability...</div>
+          )}
+          {error && <div className="sb-error">{error}</div>}
 
-      {!loading && selectedDate && slots.length > 0 && (
-        <>
-          {hasFixedSlots ? (
-            /* FIXED SLOTS MODE: Card list */
-            <div className="sb-field">
-                <label className="sb-label">Time Slots</label>
-                <p className="sb-hint">
-                  Booked slots stay visible. Only adjacent available slots can
-                  be selected together in one continuous booking window.
-                </p>
-              <div
-                className="sb-slot-list"
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "12px",
-                }}
-              >
-                {slots.map((slot) => (
-                  <button
-                    key={slot.slot_id || slot.start}
-                    type="button"
-                    className={`sb-slot sb-slot--card ${!slot.available ? "sb-slot--booked" : ""} ${
-                      selectedSlotWindows.some((selectedSlot) =>
-                        isSelectedSlotWindowMatch(selectedSlot, slot),
-                      )
-                        ? "sb-slot--selected"
-                        : ""
-                    }`}
-                    onClick={() => selectFixedSlot(slot)}
-                    disabled={!slot.available}
+          {!loading && selectedDate && slots.length > 0 && (
+            <>
+              {hasFixedSlots ? (
+                /* FIXED SLOTS MODE: Card list */
+                <div className="sb-field">
+                  <label className="sb-label">Time Slots</label>
+                  <p className="sb-hint">
+                    You can only book multiple slots if they are back-to-back
+                    with no gaps or booked slots in between.
+                  </p>
+                  <div
+                    className="sb-slot-list"
                     style={{
-                      padding: "16px",
-                      borderRadius: "8px",
-                      textAlign: "left",
                       display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
+                      flexDirection: "column",
+                      gap: "12px",
                     }}
                   >
-                    <div className="sb-slot__content">
-                      <div className="sb-slot__time">
-                        {formatTimeTo12Hour(slot.start)} -{" "}
-                        {formatTimeTo12Hour(slot.end)}
-                      </div>
-                      <div
-                        className={`sb-slot__meta ${
-                          slot.override_price ? "sb-slot__meta--override" : ""
+                    {slots.map((slot) => (
+                      <button
+                        key={slot.slot_id || slot.start}
+                        type="button"
+                        className={`sb-slot sb-slot--card ${!slot.available ? "sb-slot--booked" : ""} ${
+                          selectedSlotWindows.some((selectedSlot) =>
+                            isSelectedSlotWindowMatch(selectedSlot, slot),
+                          )
+                            ? "sb-slot--selected"
+                            : ""
                         }`}
+                        onClick={() => selectFixedSlot(slot)}
+                        disabled={!slot.available}
+                        style={{
+                          padding: "16px",
+                          borderRadius: "8px",
+                          textAlign: "left",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        }}
                       >
-                        Duration:{" "}
-                        {timeToMinutes(slot.end) - timeToMinutes(slot.start)}min
-                        {slot.override_price && (
-                          <span
-                            style={{ marginLeft: "12px", fontWeight: "600" }}
+                        <div className="sb-slot__content">
+                          <div className="sb-slot__time">
+                            {formatTimeTo12Hour(slot.start)} -{" "}
+                            {formatTimeTo12Hour(slot.end)}
+                          </div>
+                          <div
+                            className={`sb-slot__meta ${
+                              slot.override_price
+                                ? "sb-slot__meta--override"
+                                : ""
+                            }`}
                           >
-                            ${slot.override_price}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="sb-slot__status-group">
-                      <div
-                        className={`sb-slot__status ${
-                          slot.has_pending
-                            ? "sb-slot__status--pending"
-                            : slot.available
-                              ? "sb-slot__status--available"
-                              : "sb-slot__status--booked"
-                        }`}
-                      >
-                        {slot.has_pending
-                          ? "Pending"
-                          : slot.available
-                            ? "Available"
-                            : "Booked"}
-                      </div>
-                      {slot.has_pending && (
-                        <div className="sb-slot__status-note">
-                          Someone is currently booking this slot
+                            Duration:{" "}
+                            {timeToMinutes(slot.end) -
+                              timeToMinutes(slot.start)}
+                            min
+                            {slot.override_price && (
+                              <span
+                                style={{
+                                  marginLeft: "12px",
+                                  fontWeight: "600",
+                                }}
+                              >
+                                ${slot.override_price}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  </button>
-                ))}
-              </div>
-              {selectedSlotSpan && (
-                <div className="sb-slot-window-summary">
-                  <div className="sb-slot-window-summary__eyebrow">
-                    Selected booking window
-                  </div>
-                  <div className="sb-slot-window-summary__time">
-                    {formatTimeTo12Hour(selectedSlotSpan.startTime)} -{" "}
-                    {formatTimeTo12Hour(selectedSlotSpan.endTime)}
-                  </div>
-                  <div className="sb-slot-window-summary__meta">
-                    {selectedSlotWindows.length} selected{" "}
-                    {selectedSlotWindows.length === 1 ? "slot" : "slots"} |{" "}
-                    {formatDurationLabel(selectedSlotSpan.totalMinutes)}
-                  </div>
-                  <ul className="sb-slot-window-list">
-                    {selectedSlotWindows.map((selectedSlot) => (
-                      <li
-                        key={selectedSlot.slotId}
-                        className="sb-slot-window-list__item"
-                      >
-                        <span>
-                          {formatTimeTo12Hour(selectedSlot.start)} -{" "}
-                          {formatTimeTo12Hour(selectedSlot.end)}
-                        </span>
-                        <span>
-                          {formatDurationLabel(
-                            timeToMinutes(selectedSlot.end) -
-                              timeToMinutes(selectedSlot.start),
+
+                        <div className="sb-slot__status-group">
+                          <div
+                            className={`sb-slot__status ${
+                              slot.has_pending
+                                ? "sb-slot__status--pending"
+                                : slot.available
+                                  ? "sb-slot__status--available"
+                                  : "sb-slot__status--booked"
+                            }`}
+                          >
+                            {slot.has_pending
+                              ? "Pending"
+                              : slot.available
+                                ? "Available"
+                                : "Booked"}
+                          </div>
+                          {slot.has_pending && (
+                            <div className="sb-slot__status-note">
+                              Someone is currently booking this slot
+                            </div>
                           )}
-                        </span>
-                      </li>
+                        </div>
+                      </button>
                     ))}
-                  </ul>
-                  {selectedGapMinutes > 0 && (
-                    <p className="sb-slot-window-summary__note">
-                      Includes{" "}
-                      {formatDurationLabel(selectedGapMinutes)} between the
-                      selected slots, reserved as part of the booking window.
-                    </p>
-                  )}
-                  {selectedSlotMinutes > 0 &&
-                    selectedSlotMinutes !== selectedSlotSpan.totalMinutes && (
-                      <p className="sb-slot-window-summary__note">
-                        Slot time: {formatDurationLabel(selectedSlotMinutes)} |
-                        Reserved window:{" "}
+                  </div>
+                  {selectedSlotSpan && (
+                    <div className="sb-slot-window-summary">
+                      <div className="sb-slot-window-summary__eyebrow">
+                        Selected booking window
+                      </div>
+                      <div className="sb-slot-window-summary__time">
+                        {formatTimeTo12Hour(selectedSlotSpan.startTime)} -{" "}
+                        {formatTimeTo12Hour(selectedSlotSpan.endTime)}
+                      </div>
+                      <div className="sb-slot-window-summary__meta">
+                        {selectedSlotWindows.length} selected{" "}
+                        {selectedSlotWindows.length === 1 ? "slot" : "slots"} |{" "}
                         {formatDurationLabel(selectedSlotSpan.totalMinutes)}
-                      </p>
-                    )}
+                      </div>
+                      <ul className="sb-slot-window-list">
+                        {selectedSlotWindows.map((selectedSlot) => (
+                          <li
+                            key={selectedSlot.slotId}
+                            className="sb-slot-window-list__item"
+                          >
+                            <span>
+                              {formatTimeTo12Hour(selectedSlot.start)} -{" "}
+                              {formatTimeTo12Hour(selectedSlot.end)}
+                            </span>
+                            <span>
+                              {formatDurationLabel(
+                                timeToMinutes(selectedSlot.end) -
+                                  timeToMinutes(selectedSlot.start),
+                              )}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                      {selectedGapMinutes > 0 && (
+                        <p className="sb-slot-window-summary__note">
+                          Includes {formatDurationLabel(selectedGapMinutes)}{" "}
+                          between the selected slots, reserved as part of the
+                          booking window.
+                        </p>
+                      )}
+                      {selectedSlotMinutes > 0 &&
+                        selectedSlotMinutes !==
+                          selectedSlotSpan.totalMinutes && (
+                          <p className="sb-slot-window-summary__note">
+                            Slot time:{" "}
+                            {formatDurationLabel(selectedSlotMinutes)} |
+                            Reserved window:{" "}
+                            {formatDurationLabel(selectedSlotSpan.totalMinutes)}
+                          </p>
+                        )}
+                    </div>
+                  )}
                 </div>
+              ) : (
+                /* LEGACY DYNAMIC GRID MODE */
+                <>
+                  {/* Start time grid */}
+                  <div className="sb-field">
+                    <label className="sb-label">Start Time</label>
+                    <div className="sb-slot-grid">
+                      {slots.map((slot, i) => {
+                        const validStart = isStartValid(i);
+                        const isBooked = !slot.available;
+                        const isDisabled = !validStart || isBooked;
+                        return (
+                          <button
+                            key={slot.start}
+                            type="button"
+                            className={`sb-slot ${!validStart ? "sb-slot--invalid" : ""} ${isBooked ? "sb-slot--booked" : ""} ${selectedStartTime === slot.start ? "sb-slot--selected" : ""} ${slot.has_pending ? "sb-slot--pending" : ""}`}
+                            disabled={isDisabled}
+                            onClick={
+                              validStart && !isBooked
+                                ? () => setStartTime(slot.start)
+                                : undefined
+                            }
+                            title={
+                              slot.has_pending
+                                ? "Someone is currently booking this slot"
+                                : undefined
+                            }
+                          >
+                            {formatTimeTo12Hour(slot.start)}
+                            {slot.has_pending && (
+                              <span className="sb-slot__status-note sb-slot__status-note--inline">
+                                Pending
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* End time */}
+                  {selectedStartTime && (
+                    <div className="sb-field">
+                      <label className="sb-label" htmlFor="sb-end-time">
+                        End Time
+                      </label>
+                      <select
+                        id="sb-end-time"
+                        className="sb-input"
+                        value={selectedEndTime}
+                        onChange={(e) => setEndTime(e.target.value)}
+                      >
+                        {getFirstValidEnd() && (
+                          <option key="default" value={getFirstValidEnd()}>
+                            {minDuration}h (
+                            {formatTimeTo12Hour(getFirstValidEnd())})
+                          </option>
+                        )}
+                        {endTimeOptions.map((slot) => {
+                          const hours = Math.round(
+                            (timeToMinutes(slot.end) -
+                              timeToMinutes(selectedStartTime)) /
+                              60,
+                          );
+                          const tooShort = hours < minDuration;
+                          const tooLong = hours > maxDuration;
+                          return (
+                            <option
+                              key={slot.end}
+                              value={slot.end}
+                              disabled={tooShort || tooLong}
+                            >
+                              {hours}h ({formatTimeTo12Hour(slot.end)})
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          )}
+
+          {hasNoAvailability && (
+            <div className="sb-empty sb-empty--availability">
+              {blockers && blockers.length > 0 ? (
+                <>
+                  <p style={{ fontWeight: 600, marginBottom: "8px" }}>
+                    No availability for this date.
+                  </p>
+                  <p style={{ marginBottom: "4px" }}>
+                    {blockers.length === 1 ? (
+                      // Single blocker - direct message
+                      <span>
+                        <strong>{blockers[0].title}</strong> is not available.
+                        Please choose a different date or space.
+                      </span>
+                    ) : (
+                      // Multiple blockers - list them
+                      <span>
+                        {blockers.map((b, i) => (
+                          <span key={b.id}>
+                            {i > 0 && i === blockers.length - 1
+                              ? " and "
+                              : i > 0
+                                ? ", "
+                                : ""}
+                            <strong>{b.title}</strong>
+                          </span>
+                        ))}{" "}
+                        are not available. Please choose a different date or
+                        spaces.
+                      </span>
+                    )}
+                  </p>
+                  <p
+                    style={{
+                      fontSize: "14px",
+                      color: "var(--sb-muted)",
+                      marginTop: "8px",
+                    }}
+                  >
+                    Please choose a different date or different spaces.
+                  </p>
+                </>
+              ) : apiMessage ? (
+                <p>{apiMessage}</p>
+              ) : (
+                <p>No availability for this date. Please choose another day.</p>
               )}
             </div>
-          ) : (
-            /* LEGACY DYNAMIC GRID MODE */
-            <>
-              {/* Start time grid */}
-              <div className="sb-field">
-                <label className="sb-label">Start Time</label>
-                <div className="sb-slot-grid">
-                  {slots.map((slot, i) => {
-                    const validStart = isStartValid(i);
-                    const isBooked = !slot.available;
-                    const isDisabled = !validStart || isBooked;
-                    return (
-                      <button
-                        key={slot.start}
-                        type="button"
-                        className={`sb-slot ${!validStart ? "sb-slot--invalid" : ""} ${isBooked ? "sb-slot--booked" : ""} ${selectedStartTime === slot.start ? "sb-slot--selected" : ""} ${slot.has_pending ? "sb-slot--pending" : ""}`}
-                        disabled={isDisabled}
-                        onClick={
-                          validStart && !isBooked
-                            ? () => setStartTime(slot.start)
-                            : undefined
-                        }
-                        title={
-                          slot.has_pending
-                            ? "Someone is currently booking this slot"
-                            : undefined
-                        }
-                      >
-                        {formatTimeTo12Hour(slot.start)}
-                        {slot.has_pending && (
-                          <span className="sb-slot__status-note sb-slot__status-note--inline">
-                            Pending
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* End time */}
-              {selectedStartTime && (
-                <div className="sb-field">
-                  <label className="sb-label" htmlFor="sb-end-time">
-                    End Time
-                  </label>
-                  <select
-                    id="sb-end-time"
-                    className="sb-input"
-                    value={selectedEndTime}
-                    onChange={(e) => setEndTime(e.target.value)}
-                  >
-                    {getFirstValidEnd() && (
-                      <option key="default" value={getFirstValidEnd()}>
-                        {minDuration}h ({formatTimeTo12Hour(getFirstValidEnd())}
-                        )
-                      </option>
-                    )}
-                    {endTimeOptions.map((slot) => {
-                      const hours = Math.round(
-                        (timeToMinutes(slot.end) -
-                          timeToMinutes(selectedStartTime)) /
-                          60,
-                      );
-                      const tooShort = hours < minDuration;
-                      const tooLong = hours > maxDuration;
-                      return (
-                        <option
-                          key={slot.end}
-                          value={slot.end}
-                          disabled={tooShort || tooLong}
-                        >
-                          {hours}h ({formatTimeTo12Hour(slot.end)})
-                        </option>
-                      );
-                    })}
-                  </select>
-                </div>
-              )}
-            </>
           )}
-        </>
-      )}
-
-      {hasNoAvailability && (
-        <div className="sb-empty sb-empty--availability">
-          {blockers && blockers.length > 0 ? (
-            <>
-              <p style={{ fontWeight: 600, marginBottom: "8px" }}>
-                No availability for this date.
-              </p>
-              <p style={{ marginBottom: "4px" }}>
-                {blockers.length === 1 ? (
-                  // Single blocker - direct message
-                  <span>
-                    <strong>{blockers[0].title}</strong> is not available.
-                    Please choose a different date or space.
-                  </span>
-                ) : (
-                  // Multiple blockers - list them
-                  <span>
-                    {blockers.map((b, i) => (
-                      <span key={b.id}>
-                        {i > 0 && i === blockers.length - 1
-                          ? " and "
-                          : i > 0
-                            ? ", "
-                            : ""}
-                        <strong>{b.title}</strong>
-                      </span>
-                    ))}{" "}
-                    are not available. Please choose a different date or spaces.
-                  </span>
-                )}
-              </p>
-              <p
-                style={{
-                  fontSize: "14px",
-                  color: "var(--sb-muted)",
-                  marginTop: "8px",
-                }}
-              >
-                Please choose a different date or different spaces.
-              </p>
-            </>
-          ) : apiMessage ? (
-            <p>{apiMessage}</p>
-          ) : (
-            <p>No availability for this date. Please choose another day.</p>
-          )}
-        </div>
-      )}
-
         </div>
       </div>
 
