@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { TimeSlot } from "@/types";
 import {
+  addMinutesToTime,
   getSelectedSlotSpan,
   updateContiguousSlotSelection,
 } from "@/utils/slotSelection";
@@ -106,5 +107,10 @@ describe("slotSelection", () => {
       slotMinutes: 240,
       gapMinutes: 60,
     });
+  });
+
+  it("adds minutes to a time string without changing the format", () => {
+    expect(addMinutesToTime("11:30", 30)).toBe("12:00");
+    expect(addMinutesToTime("23:45", 30)).toBe("00:15");
   });
 });

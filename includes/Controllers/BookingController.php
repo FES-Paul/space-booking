@@ -7,6 +7,7 @@ use SpaceBooking\Services\RecaptchaService;
 use SpaceBooking\Services\BookingSpamGuard;
 use SpaceBooking\Services\InventoryService;
 use SpaceBooking\Services\PricingService;
+use SpaceBooking\Services\AvailabilityService;
 use WP_REST_Controller;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -25,6 +26,7 @@ final class BookingController extends WP_REST_Controller
 	private RecaptchaService $recaptcha;
 	private InventoryService $inventory;
 	private PricingService $pricing;
+	private AvailabilityService $availability;
 	private \SpaceBooking\Services\WooCommerceService $wc;
 
 	public function __construct()
@@ -34,6 +36,7 @@ final class BookingController extends WP_REST_Controller
 		$this->recaptcha = new RecaptchaService();
 		$this->inventory = new InventoryService();
 		$this->pricing = new PricingService();
+		$this->availability = new AvailabilityService($this->repo);
 		$this->wc = new \SpaceBooking\Services\WooCommerceService();
 	}
 
@@ -90,6 +93,7 @@ final class BookingController extends WP_REST_Controller
 		$date = (string) $request->get_param('date');
 		$start_time = (string) $request->get_param('start_time');
 		$end_time = (string) $request->get_param('end_time');
+		$has_thirty_min_extension = rest_sanitize_boolean($request->get_param('has_thirty_min_extension'));
 		$extras_input = (array) ($request->get_param('extras') ?? []);
 		$extras = array_values(array_filter(array_map(static function ($extra): ?array {
 			if (!is_array($extra)) {
@@ -179,17 +183,29 @@ final class BookingController extends WP_REST_Controller
 			return new WP_REST_Response(['message' => 'Missing selected_item_ids.'], 422);
 		}
 
+		if (
+			$has_thirty_min_extension
+			&& !$this->pricing->selection_supports_thirty_min_extension($selected_item_ids)
+		) {
+			return new WP_REST_Response(['message' => '30-minute extension is not available for this selection.'], 422);
+		}
+
+		$effective_end_time = $this->pricing->get_effective_end_time($end_time, $has_thirty_min_extension);
+		if ($effective_end_time <= $start_time) {
+			return new WP_REST_Response(['message' => 'Invalid 30-minute extension end time.'], 422);
+		}
+
 		// NEW SCHEMA: Validate that either space_ids OR package_ids is provided
 		if (empty($space_ids) && empty($package_ids)) {
 			return new WP_REST_Response(['message' => 'Either space_ids or package_ids must be provided.'], 422);
 		}
 
-		if ($email !== '' && $this->spam_guard->has_recent_duplicate($email, $date, $start_time, $end_time)) {
+		if ($email !== '' && $this->spam_guard->has_recent_duplicate($email, $date, $start_time, $effective_end_time)) {
 			$this->spam_guard->log_suspicious_attempt('duplicate_booking_window', [
 				'email' => $email,
 				'date' => $date,
 				'start_time' => $start_time,
-				'end_time' => $end_time,
+				'end_time' => $effective_end_time,
 			]);
 			return new WP_REST_Response(['message' => 'Duplicate booking detected. Please wait before submitting again.'], 409);
 		}
@@ -210,12 +226,12 @@ final class BookingController extends WP_REST_Controller
 			}
 		}
 
-		if ($email !== '' && $this->spam_guard->has_recent_duplicate($email, $date, $start_time, $end_time)) {
+		if ($email !== '' && $this->spam_guard->has_recent_duplicate($email, $date, $start_time, $effective_end_time)) {
 			$this->spam_guard->log_suspicious_attempt('duplicate_after_captcha', [
 				'email' => $email,
 				'date' => $date,
 				'start_time' => $start_time,
-				'end_time' => $end_time,
+				'end_time' => $effective_end_time,
 			]);
 			return new WP_REST_Response(['message' => 'Duplicate booking detected after verification. Please retry later.'], 409);
 		}
@@ -234,13 +250,14 @@ final class BookingController extends WP_REST_Controller
 			'package_ids' => $package_ids,
 			'booking_date' => $date,
 			'start_time' => $start_time,
-			'end_time' => $end_time,
+			'end_time' => $effective_end_time,
 			'customer_name' => $name,
 			'customer_email' => $email,
 			'customer_phone' => $phone,
 			'notes' => $notes,
 			'marketing_source' => $marketing_source,
 			'extras' => $extras,
+			'has_thirty_min_extension' => $has_thirty_min_extension,
 		];
 
 		// NEW SCHEMA: Validate all space IDs exist and are published
@@ -272,16 +289,22 @@ final class BookingController extends WP_REST_Controller
 		if (empty($footprint_spaces)) {
 			$footprint_spaces = $selected_item_ids;
 		}
+		if (
+			$has_thirty_min_extension
+			&& !$this->extension_fits_selected_spaces($footprint_spaces, $date, $effective_end_time)
+		) {
+			return new WP_REST_Response(['message' => '30-minute extension is not available for one or more selected spaces at this time.'], 422);
+		}
 		$blocking = $this->repo->get_blocking_intervals($footprint_spaces, $date);
 		foreach ($blocking as $b) {
-			if ($start_time < $b['end'] && $end_time > $b['start']) {
+			if ($start_time < $b['end'] && $effective_end_time > $b['start']) {
 				return new WP_REST_Response(['message' => 'Selected time is no longer available for one or more spaces.'], 409);
 			}
 		}
 
 		// ── Guard: extras inventory ───────────────────────────────────────────
 		if (!empty($extras)) {
-			$inv_check = $this->inventory->validate_extras($extras, $date, $start_time, $end_time);
+			$inv_check = $this->inventory->validate_extras($extras, $date, $start_time, $effective_end_time);
 			if (!$inv_check['valid']) {
 				return new WP_REST_Response([
 					'message' => 'Some extras are no longer available.',
@@ -301,7 +324,8 @@ final class BookingController extends WP_REST_Controller
 			$selected_item_ids,
 			$package_ids,
 			$sanitized_package_answers,
-			null
+			null,
+			$has_thirty_min_extension
 		);
 
 		// DEBUG: Log pricing details
@@ -359,6 +383,8 @@ final class BookingController extends WP_REST_Controller
 			$booking_id = $this->repo->create($data);
 			// Save selected_item_ids for WC multi-item
 			$this->repo->save_meta($booking_id, '_sb_selected_item_ids', wp_json_encode($selected_item_ids));
+			$this->repo->save_meta($booking_id, '_sb_has_thirty_min_extension', $has_thirty_min_extension ? '1' : '0');
+			$this->repo->save_meta($booking_id, '_sb_base_end_time', $end_time);
 			// Persist immutable booking snapshot + breakdown in booking meta.
 			$this->repo->save_meta($booking_id, '_sb_price_breakdown', wp_json_encode($price['breakdown']));
 			if ($frontend_breakdown && $price['breakdown']) {
@@ -374,7 +400,7 @@ final class BookingController extends WP_REST_Controller
 				'total' => (float) $price['total_price'],
 				'date' => $date,
 				'start_time' => $start_time,
-				'end_time' => $end_time,
+				'end_time' => $effective_end_time,
 				'line_items' => [],
 				'captured_at_gmt' => gmdate('c'),
 			];
@@ -443,7 +469,7 @@ final class BookingController extends WP_REST_Controller
 		// NEW SCHEMA: Link all spaces using link_space (iterate over array)
 		foreach ($space_ids as $sid) {
 			try {
-				$this->repo->link_space($booking_id, $sid, $start_time, $end_time);
+				$this->repo->link_space($booking_id, $sid, $start_time, $effective_end_time);
 			} catch (\RuntimeException $e) {
 				error_log('Failed to link space for booking #' . $booking_id . ' space ' . $sid . ': ' . $e->getMessage());
 			}
@@ -472,7 +498,9 @@ final class BookingController extends WP_REST_Controller
 				'selected_item_ids' => $selected_item_ids,
 				'date' => $date,
 				'start_time' => $start_time,
-				'end_time' => $end_time,
+				'end_time' => $effective_end_time,
+				'has_thirty_min_extension' => $has_thirty_min_extension,
+				'base_end_time' => $end_time,
 				'duration_hours' => $price['duration_hours'],
 				'base_price' => $price['base_price'],
 				'extras_price' => $price['extras_price'],
@@ -502,12 +530,14 @@ final class BookingController extends WP_REST_Controller
 					'booking_data' => [
 						'space_ids' => $space_ids,
 						'package_ids' => $package_ids,
-						'selected_item_ids' => $selected_item_ids,
-						'date' => $date,
-						'start_time' => $start_time,
-						'end_time' => $end_time,
-						'base_price' => $price['base_price'],
-						'extras_price' => $price['extras_price'],
+					'selected_item_ids' => $selected_item_ids,
+					'date' => $date,
+					'start_time' => $start_time,
+					'end_time' => $effective_end_time,
+					'has_thirty_min_extension' => $has_thirty_min_extension,
+					'base_end_time' => $end_time,
+					'base_price' => $price['base_price'],
+					'extras_price' => $price['extras_price'],
 						'modifier_price' => $price['modifier_price'] ?? 0,
 						'customer_name' => $name,
 						'customer_email' => $email,
@@ -560,6 +590,8 @@ final class BookingController extends WP_REST_Controller
 		$response_data = [
 			'booking_id' => $booking_id,
 			'checkout_url' => $checkout_url,
+			'total_price' => (float) $price['total_price'],
+			'breakdown' => $price['breakdown'],
 			'price' => $price,
 			'cart_added_directly' => $cart_added,
 		];
@@ -614,6 +646,7 @@ final class BookingController extends WP_REST_Controller
 			'date' => ['required' => true, 'sanitize_callback' => 'sanitize_text_field'],
 			'start_time' => ['required' => true, 'sanitize_callback' => 'sanitize_text_field'],
 			'end_time' => ['required' => true, 'sanitize_callback' => 'sanitize_text_field'],
+			'has_thirty_min_extension' => ['required' => false, 'default' => false, 'sanitize_callback' => 'rest_sanitize_boolean'],
 			'customer_name' => ['required' => false, 'sanitize_callback' => 'sanitize_text_field'],
 			'customer_email' => [
 				'required' => false,
@@ -637,6 +670,27 @@ final class BookingController extends WP_REST_Controller
 				}
 			],
 		];
+	}
+
+	private function extension_fits_selected_spaces(array $space_ids, string $date, string $effective_end_time): bool
+	{
+		$space_ids = array_values(array_unique(array_filter(array_map('absint', $space_ids))));
+		if (empty($space_ids)) {
+			return false;
+		}
+
+		foreach ($space_ids as $space_id) {
+			[$open_time, $close_time] = $this->availability->resolve_effective_hours($space_id, $date);
+			if (!$open_time || !$close_time) {
+				return false;
+			}
+
+			if ($effective_end_time > $close_time) {
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	private function sanitize_package_question_answers(array $answers): array

@@ -23,6 +23,7 @@ final class PricingService
 	 * @param array|null $package_ids NEW: Array of package IDs (for extras inclusion calculation)
 	 * @param array|null $package_question_answers NEW: selected package-question answers
 	 * @param string|null $slot_id
+	 * @param bool $has_thirty_min_extension
 	 * @return array {
 	 *   base_price: float,
 	 *   modifier_price: float,
@@ -40,9 +41,12 @@ final class PricingService
 		?array $item_ids = null,
 		?array $package_ids = null,
 		?array $package_question_answers = null,
-		?string $slot_id = null
+		?string $slot_id = null,
+		bool $has_thirty_min_extension = false
 	): array {
-		$duration_hours = $this->hours_between($start_time, $end_time);
+		$base_duration_hours = $this->hours_between($start_time, $end_time);
+		$effective_end_time = $this->get_effective_end_time($end_time, $has_thirty_min_extension);
+		$duration_hours = $this->hours_between($start_time, $effective_end_time);
 
 		$running_total = 0.0;
 		$enriched_breakdown = [];
@@ -108,7 +112,7 @@ final class PricingService
 					}
 				}
 			} else if ($item_type === 'sb_space') {
-				$item_duration = $duration_hours;
+				$item_duration = $base_duration_hours;
 				$total_duration += $item_duration;
 				$fixed_key = '_sb_fixed_price_' . round($item_duration) . 'hours';
 				$fixed_price = (float) get_post_meta($item_id, $fixed_key, true);
@@ -188,9 +192,16 @@ final class PricingService
 		$extras_price = $extras_result['total'];
 		$question_pricing = $this->calculate_package_question_pricing($package_question_answers ?? []);
 		$package_question_price = (float) ($question_pricing['total'] ?? 0.0);
-		$total = $running_total + $extras_price + $package_question_price;
+		$thirty_min_extension = $has_thirty_min_extension
+			? $this->calculate_thirty_min_extension($item_ids)
+			: ['total' => 0.0, 'breakdown' => []];
+		$thirty_min_extension_price = (float) ($thirty_min_extension['total'] ?? 0.0);
+		$total = $running_total + $extras_price + $package_question_price + $thirty_min_extension_price;
 
 		$breakdown = $enriched_breakdown;
+		if (!empty($thirty_min_extension['breakdown']) && is_array($thirty_min_extension['breakdown'])) {
+			$breakdown = array_merge($breakdown, $thirty_min_extension['breakdown']);
+		}
 		$extras_breakdown = [];
 		if ($extras_price > 0) {
 			$extras_breakdown = $extras_result['breakdown'];
@@ -203,10 +214,13 @@ final class PricingService
 		return [
 			'base_price' => $running_total,
 			'extras_price' => $extras_price,
+			'thirty_min_extension_price' => $thirty_min_extension_price,
 			'package_question_price' => $package_question_price,
 			'total_price' => round($total, 2),
 			'duration_hours' => $duration_hours,
+			'base_duration_hours' => $base_duration_hours,
 			'display_duration' => round($display_duration, 1),
+			'effective_end_time' => $effective_end_time,
 			'breakdown' => $breakdown,
 			'items' => $item_details,
 			'extras_breakdown' => $extras_breakdown,
@@ -554,6 +568,93 @@ final class PricingService
 	}
 
 	// ── Helpers ───────────────────────────────────────────────────────────────
+
+	public function selection_supports_thirty_min_extension(array $item_ids): bool
+	{
+		if (empty($item_ids)) {
+			return false;
+		}
+
+		foreach ($item_ids as $item_id) {
+			$item_id = absint($item_id);
+			if ($item_id <= 0) {
+				return false;
+			}
+
+			$post = get_post($item_id);
+			if (
+				!$post
+				|| !in_array($post->post_type, ['sb_space', 'sb_package'], true)
+				|| $post->post_status !== 'publish'
+			) {
+				return false;
+			}
+
+			if (!get_post_meta($item_id, '_sb_thirty_min_extension_enabled', true)) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	public function get_effective_end_time(string $end_time, bool $has_thirty_min_extension = false): string
+	{
+		if (!$has_thirty_min_extension || $end_time === '') {
+			return $end_time;
+		}
+
+		return $this->add_minutes_to_time($end_time, 30);
+	}
+
+	private function calculate_thirty_min_extension(array $item_ids): array
+	{
+		$total = 0.0;
+		$breakdown = [];
+
+		foreach ($item_ids as $item_id) {
+			$item_id = absint($item_id);
+			if ($item_id <= 0) {
+				continue;
+			}
+
+			$post = get_post($item_id);
+			if (
+				!$post
+				|| !in_array($post->post_type, ['sb_space', 'sb_package'], true)
+				|| $post->post_status !== 'publish'
+				|| !get_post_meta($item_id, '_sb_thirty_min_extension_enabled', true)
+			) {
+				continue;
+			}
+
+			$price = max(0, (float) get_post_meta($item_id, '_sb_thirty_min_extension_price', true));
+			$title = sanitize_text_field((string) get_the_title($item_id));
+
+			$total += $price;
+			$breakdown[] = [
+				'label' => $title . ' (30-Minute Extension)',
+				'amount' => round($price, 2),
+				'context' => [
+					'type' => 'modifier',
+					'name' => '30-Minute Extension',
+					'id' => $item_id,
+				],
+			];
+		}
+
+		return [
+			'total' => round($total, 2),
+			'breakdown' => $breakdown,
+		];
+	}
+
+	private function add_minutes_to_time(string $time, int $minutes): string
+	{
+		$dt = new DateTime("1970-01-01 {$time}");
+		$dt->modify(($minutes >= 0 ? '+' : '') . $minutes . ' minutes');
+		return $dt->format('H:i');
+	}
 
 	private function get_price_segments(int $space_id, string $date, string $start_time, string $end_time): array
 	{

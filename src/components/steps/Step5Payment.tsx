@@ -20,6 +20,7 @@ export function Step5Payment() {
     selectedSlotWindows,
     selectedStartTime,
     selectedEndTime,
+    hasThirtyMinuteExtension,
     customerInfo,
     selectedExtras,
     prevStep,
@@ -33,6 +34,9 @@ export function Step5Payment() {
     setStep,
     extrasDetails,
     getMergedExtras,
+    getEffectiveEndTime,
+    getThirtyMinuteExtensionPrice,
+    setThirtyMinuteExtension,
   } = useBookingStore();
 
   const [loading, setLoading] = useState(false);
@@ -41,6 +45,8 @@ export function Step5Payment() {
   const [formStartedAt] = useState<number>(() => Math.floor(Date.now() / 1000));
   const [recaptchaWidgetId, setRecaptchaWidgetId] = useState<number | null>(null);
   const selectedSlotSpan = getSelectedSlotSpan(selectedSlotWindows);
+  const effectiveEndTime = getEffectiveEndTime();
+  const thirtyMinuteExtensionPrice = getThirtyMinuteExtensionPrice();
 
   const recaptchaConfig = window.sbConfig?.recaptcha;
   const recaptchaEnabled = !!recaptchaConfig?.enabled;
@@ -134,6 +140,7 @@ export function Step5Payment() {
           date: selectedDate,
           start_time: selectedStartTime,
           end_time: selectedEndTime,
+          has_thirty_min_extension: hasThirtyMinuteExtension,
           extras: selectedExtras,
           package_ids: useBookingStore.getState().getAllPackageIds(),
           package_question_answers: packageQuestionPricingPayload,
@@ -144,7 +151,7 @@ export function Step5Payment() {
       }
     };
     refreshPricing();
-  }, [selectedItems, selectedDate, selectedStartTime, selectedEndTime, selectedExtras, packageQuestionAnswers]);
+  }, [selectedItems, selectedDate, selectedStartTime, selectedEndTime, hasThirtyMinuteExtension, selectedExtras, packageQuestionAnswers]);
 
   const buildPackageQuestionPayload = () => {
     const payload: Array<{
@@ -267,6 +274,7 @@ export function Step5Payment() {
         date: selectedDate,
         start_time: selectedStartTime,
         end_time: selectedEndTime,
+        has_thirty_min_extension: hasThirtyMinuteExtension,
         customer_name: String(customerInfo.name || "").trim(),
         customer_email: String(customerInfo.email || "").trim(),
         customer_phone: String(customerInfo.phone || ""),
@@ -405,6 +413,10 @@ export function Step5Payment() {
   const reviewExtras: MergedExtra[] =
     extrasDetails.length > 0 ? extrasDetails : getMergedExtras();
   const formattedSelectedDate = formatBookingDate(selectedDate);
+  const displayedEndTime = effectiveEndTime || selectedEndTime;
+  const displayedSlotDurationMinutes = selectedSlotSpan
+    ? selectedSlotSpan.totalMinutes + (hasThirtyMinuteExtension ? 30 : 0)
+    : 0;
 
   return (
     <div className="sb-step sb-step-5">
@@ -414,6 +426,21 @@ export function Step5Payment() {
         <div className="sb-summary-grid">
           <div className="sb-summary-row"><span>Space</span><span>{getSpaceSummaryLabel()}</span></div>
           <div className="sb-summary-row"><span>Date</span><span>{formattedSelectedDate || selectedDate}</span></div>
+          {hasThirtyMinuteExtension && (
+            <>
+              <div className="sb-summary-row">
+                <span>30-minute add-on</span>
+                <span>
+                  Added for {window.sbConfig.symbol}
+                  {thirtyMinuteExtensionPrice.toFixed(2)}
+                </span>
+              </div>
+              <div className="sb-summary-row">
+                <span>Extended end time</span>
+                <span>{formatTimeTo12Hour(displayedEndTime)}</span>
+              </div>
+            </>
+          )}
           <div className="sb-summary-row"><span>Time</span><span>{formatTimeTo12Hour(selectedStartTime)} – {formatTimeTo12Hour(selectedEndTime)}</span></div>
         </div>
 
@@ -450,12 +477,12 @@ export function Step5Payment() {
               </div>
               <div className="sb-slot-window-summary__time">
                 {formatTimeTo12Hour(selectedSlotSpan.startTime)} -{" "}
-                {formatTimeTo12Hour(selectedSlotSpan.endTime)}
+                {formatTimeTo12Hour(displayedEndTime)}
               </div>
               <div className="sb-slot-window-summary__meta">
                 {selectedSlotWindows.length} selected{" "}
                 {selectedSlotWindows.length === 1 ? "slot" : "slots"} |{" "}
-                {formatDurationLabel(selectedSlotSpan.totalMinutes)}
+                {formatDurationLabel(displayedSlotDurationMinutes)}
               </div>
               <ul className="sb-slot-window-list">
                 {selectedSlotWindows.map((selectedSlot) => (
@@ -482,7 +509,40 @@ export function Step5Payment() {
                   reserved between the selected slots.
                 </p>
               )}
+              {hasThirtyMinuteExtension && (
+                <p className="sb-slot-window-summary__note">
+                  With the 30-minute add-on, this booking will end at{" "}
+                  {formatTimeTo12Hour(displayedEndTime)}.
+                </p>
+              )}
             </div>
+          </>
+        )}
+
+        {hasThirtyMinuteExtension && (
+          <>
+            <h4>Booking Extension</h4>
+            <ul className="sb-review-edit-list">
+              <li className="sb-review-edit__item">
+                <div className="sb-review-edit__details">
+                  <div className="sb-review-edit__title">
+                    30-Minute Booking Extension
+                  </div>
+                  <div className="sb-review-edit__meta">
+                    Adds 30 minutes to the booking end time for{" "}
+                    {window.sbConfig.symbol}
+                    {thirtyMinuteExtensionPrice.toFixed(2)}.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="sb-btn sb-btn--ghost sb-review-edit__action"
+                  onClick={() => setThirtyMinuteExtension(false)}
+                >
+                  Remove add-on
+                </button>
+              </li>
+            </ul>
           </>
         )}
 

@@ -47,6 +47,7 @@ final class PricingController extends WP_REST_Controller
 		$date = (string) $request->get_param('date');
 		$start_time = (string) $request->get_param('start_time');
 		$end_time = (string) $request->get_param('end_time');
+		$has_thirty_min_extension = rest_sanitize_boolean($request->get_param('has_thirty_min_extension'));
 		$extras = (array) ($request->get_param('extras') ?? []);
 		$package_question_answers = (array) ($request->get_param('package_question_answers') ?? []);
 
@@ -85,6 +86,13 @@ final class PricingController extends WP_REST_Controller
 			}
 		}
 
+		if (
+			$has_thirty_min_extension
+			&& !$this->pricing->selection_supports_thirty_min_extension($item_ids)
+		) {
+			return new WP_REST_Response(['message' => '30-minute extension is not available for this selection.'], 422);
+		}
+
 		$price = $this->pricing->calculate(
 			$space_id,
 			$date,
@@ -94,7 +102,8 @@ final class PricingController extends WP_REST_Controller
 			$item_ids,
 			$package_ids,
 			$package_question_answers,
-			$request->get_param('slot_id')
+			$request->get_param('slot_id'),
+			$has_thirty_min_extension
 		);
 
 		error_log('SB_DEBUG_PRICING: Calculated total: ' . $price['total_price'] . ', breakdown count: ' . count($price['breakdown']));
@@ -116,6 +125,7 @@ final class PricingController extends WP_REST_Controller
 			'date' => ['required' => true, 'sanitize_callback' => 'sanitize_text_field'],
 			'start_time' => ['required' => true, 'sanitize_callback' => 'sanitize_text_field'],
 			'end_time' => ['required' => true, 'sanitize_callback' => 'sanitize_text_field'],
+			'has_thirty_min_extension' => ['required' => false, 'default' => false, 'sanitize_callback' => 'rest_sanitize_boolean'],
 			'extras' => ['required' => false, 'default' => []],
 			'package_question_answers' => ['required' => false, 'default' => []],
 		];

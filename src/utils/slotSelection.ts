@@ -14,6 +14,15 @@ export const timeToMinutes = (time: string): number => {
   return hours * 60 + minutes;
 };
 
+export const addMinutesToTime = (time: string, minutesToAdd: number): string => {
+  const totalMinutes = timeToMinutes(time) + minutesToAdd;
+  const normalizedMinutes = ((totalMinutes % 1440) + 1440) % 1440;
+  const hours = Math.floor(normalizedMinutes / 60);
+  const minutes = normalizedMinutes % 60;
+
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+};
+
 export const getTimeSlotKey = (
   slot: Pick<TimeSlot, "start" | "end" | "slot_id">,
 ): string => slot.slot_id ?? `${slot.start}-${slot.end}`;

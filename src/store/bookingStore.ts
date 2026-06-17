@@ -16,7 +16,7 @@ import type {
 } from "../types";
 
 import { checkCartHasBooking, fetchResourceMap } from "../utils/api";
-import { getSelectedSlotSpan } from "../utils/slotSelection";
+import { addMinutesToTime, getSelectedSlotSpan } from "../utils/slotSelection";
 
 // New: Track which spaces are covered by selected packages
 interface PackageCoverage {
@@ -49,6 +49,7 @@ interface PersistedBookingDraft {
   selectedSlotWindows: SelectedSlotWindow[];
   selectedStartTime: string;
   selectedEndTime: string;
+  hasThirtyMinuteExtension?: boolean;
   selectedExtras: SelectedExtra[];
   customerInfo: CustomerInfo;
   packageQuestionAnswers: Record<string, PackageQuestionAnswerValue>;
@@ -68,6 +69,7 @@ interface BookingState {
   selectedSlotWindows: SelectedSlotWindow[];
   selectedStartTime: string;
   selectedEndTime: string;
+  hasThirtyMinuteExtension: boolean;
   availableExtras: Extra[];
   selectedExtras: SelectedExtra[];
   customerInfo: CustomerInfo;
@@ -93,6 +95,7 @@ interface BookingState {
   setSelectedSlotWindows: (slots: SelectedSlotWindow[]) => void;
   setStartTime: (time: string) => void;
   setEndTime: (time: string) => void;
+  setThirtyMinuteExtension: (enabled: boolean) => void;
   setAvailableExtras: (extras: Extra[]) => void;
   setSelectedExtras: (extras: SelectedExtra[]) => void;
   setIncludedExtras: (extraIds: number[]) => void;
@@ -133,6 +136,9 @@ interface BookingState {
   reset: () => void;
   setBookingPolicy: (policy: string) => void;
   getMergedExtras: () => MergedExtra[];
+  canUseThirtyMinuteExtension: () => boolean;
+  getThirtyMinuteExtensionPrice: () => number;
+  getEffectiveEndTime: () => string;
 }
 
 // NEW: Type for merged extras (UI adapter)
@@ -147,6 +153,7 @@ export interface MergedExtra {
 }
 
 const DEFAULT_CUSTOMER: CustomerInfo = {};
+const THIRTY_MIN_EXTENSION_MINUTES = 30;
 
 const createInitialBookingState = () => ({
   currentStep: 1 as BookingStep,
@@ -159,6 +166,7 @@ const createInitialBookingState = () => ({
   selectedSlotWindows: [] as SelectedSlotWindow[],
   selectedStartTime: "",
   selectedEndTime: "",
+  hasThirtyMinuteExtension: false,
   availableExtras: [] as Extra[],
   selectedExtras: [] as SelectedExtra[],
   customerInfo: { ...DEFAULT_CUSTOMER },
@@ -213,6 +221,33 @@ const getIncludedExtraQtyMap = (items: SelectionItem[]): Map<number, number> => 
   return includedQtyMap;
 };
 
+const itemSupportsThirtyMinuteExtension = (item: SelectionItem): boolean =>
+  !!item.thirty_min_extension_enabled;
+
+const getThirtyMinuteExtensionPriceForItem = (item: SelectionItem): number =>
+  itemSupportsThirtyMinuteExtension(item)
+    ? Math.max(0, Number(item.thirty_min_extension_price ?? 0))
+    : 0;
+
+const canUseThirtyMinuteExtensionWithItems = (items: SelectionItem[]): boolean =>
+  items.length > 0 && items.every(itemSupportsThirtyMinuteExtension);
+
+const getThirtyMinuteExtensionPriceTotal = (items: SelectionItem[]): number =>
+  items.reduce(
+    (total, item) => total + getThirtyMinuteExtensionPriceForItem(item),
+    0,
+  );
+
+const getEffectiveEndTimeFromState = (state: Pick<BookingState, "selectedEndTime" | "hasThirtyMinuteExtension">): string => {
+  if (!state.selectedEndTime) {
+    return "";
+  }
+
+  return state.hasThirtyMinuteExtension
+    ? addMinutesToTime(state.selectedEndTime, THIRTY_MIN_EXTENSION_MINUTES)
+    : state.selectedEndTime;
+};
+
 const getPackageIdFromAnswerKey = (answerKey: string): number | null => {
   const match = /^pkg_(\d+)__/.exec(answerKey);
   if (!match) return null;
@@ -243,6 +278,7 @@ type SelectionRemovalContext = Pick<
   | "currentStep"
   | "selectedItems"
   | "resourceMap"
+  | "hasThirtyMinuteExtension"
   | "selectedExtras"
   | "packageQuestionAnswers"
 >;
@@ -294,6 +330,9 @@ const createSelectionRemovalPatch = (
     state.packageQuestionAnswers,
     removedPackageIds,
   );
+  const canKeepThirtyMinuteExtension =
+    state.hasThirtyMinuteExtension &&
+    canUseThirtyMinuteExtensionWithItems(selectedItems);
 
   if (selectedItems.length === 0) {
     return {
@@ -305,6 +344,7 @@ const createSelectionRemovalPatch = (
       selectedSlotWindows: [],
       selectedStartTime: "",
       selectedEndTime: "",
+      hasThirtyMinuteExtension: false,
       availableExtras: [],
       selectedExtras: [],
       packageQuestionAnswers: {},
@@ -326,6 +366,7 @@ const createSelectionRemovalPatch = (
     selectedItems,
     lockedResourceIds,
     packageCoverage,
+    hasThirtyMinuteExtension: canKeepThirtyMinuteExtension,
     selectedExtras,
     packageQuestionAnswers,
     checkoutUrl: null,
@@ -378,6 +419,7 @@ const getPersistedDraft = (state: BookingState): PersistedBookingDraft => ({
   selectedSlotWindows: state.selectedSlotWindows,
   selectedStartTime: state.selectedStartTime,
   selectedEndTime: state.selectedEndTime,
+  hasThirtyMinuteExtension: state.hasThirtyMinuteExtension,
   selectedExtras: state.selectedExtras,
   customerInfo: state.customerInfo,
   packageQuestionAnswers: state.packageQuestionAnswers,
@@ -389,6 +431,7 @@ const hasDraftContent = (draft: PersistedBookingDraft): boolean =>
   draft.selectedSlotWindows.length > 0 ||
   draft.selectedStartTime.length > 0 ||
   draft.selectedEndTime.length > 0 ||
+  !!draft.hasThirtyMinuteExtension ||
   draft.selectedExtras.length > 0 ||
   hasCustomerInfo(draft.customerInfo) ||
   Object.keys(draft.packageQuestionAnswers).length > 0;
@@ -454,6 +497,7 @@ const parseDraft = (raw: string | null): PersistedBookingDraft | null => {
           : "",
       selectedEndTime:
         typeof parsed.selectedEndTime === "string" ? parsed.selectedEndTime : "",
+      hasThirtyMinuteExtension: !!parsed.hasThirtyMinuteExtension,
       selectedExtras: parsed.selectedExtras as SelectedExtra[],
       customerInfo: parsed.customerInfo as CustomerInfo,
       packageQuestionAnswers:
@@ -564,13 +608,20 @@ export const useBookingStore = create<BookingState>()((set, get) => ({
     }
     const newSelected = [...state.selectedItems, item];
     const newLocked = computeLockedResourceIds(newSelected, map);
+    const canKeepThirtyMinuteExtension =
+      state.hasThirtyMinuteExtension &&
+      canUseThirtyMinuteExtensionWithItems(newSelected);
     console.log(
       "setting new selected:",
       newSelected.map((i) => i.id),
       "new locked:",
       newLocked,
     );
-    set({ selectedItems: newSelected, lockedResourceIds: newLocked });
+    set({
+      selectedItems: newSelected,
+      lockedResourceIds: newLocked,
+      hasThirtyMinuteExtension: canKeepThirtyMinuteExtension,
+    });
     console.log("addItem done");
   },
   removeItem: (id: number) => {
@@ -716,10 +767,14 @@ export const useBookingStore = create<BookingState>()((set, get) => ({
       }
 
       const newLocked = computeLockedResourceIds(updatedItems, map);
+      const canKeepThirtyMinuteExtension =
+        state.hasThirtyMinuteExtension &&
+        canUseThirtyMinuteExtensionWithItems(updatedItems);
       set({ 
         selectedItems: updatedItems, 
         lockedResourceIds: newLocked,
-        packageCoverage: newPackageCoverage 
+        packageCoverage: newPackageCoverage,
+        hasThirtyMinuteExtension: canKeepThirtyMinuteExtension,
       });
 
       console.log(`Selected: ${targetId}. Updating locks...`);
@@ -735,6 +790,7 @@ clearItems: () =>
       selectedSlotWindows: [],
       selectedStartTime: "",
       selectedEndTime: "",
+      hasThirtyMinuteExtension: false,
       availableExtras: [],
       selectedExtras: [],
       packageQuestionAnswers: {},
@@ -773,6 +829,19 @@ clearItems: () =>
       .filter(item => item.type === "package")
       .map(item => Number(item.id));
   },
+  canUseThirtyMinuteExtension: () => {
+    const state = get();
+    return canUseThirtyMinuteExtensionWithItems(state.selectedItems);
+  },
+  getThirtyMinuteExtensionPrice: () => {
+    const state = get();
+    if (!canUseThirtyMinuteExtensionWithItems(state.selectedItems)) {
+      return 0;
+    }
+
+    return getThirtyMinuteExtensionPriceTotal(state.selectedItems);
+  },
+  getEffectiveEndTime: () => getEffectiveEndTimeFromState(get()),
   getCoveredSpaceIds: () => {
     const state = get();
     return state.packageCoverage.flatMap((pc) => pc.coveredSpaceIds);
@@ -854,6 +923,7 @@ clearItems: () =>
       selectedSlotWindows: [],
       selectedStartTime: "",
       selectedEndTime: "",
+      hasThirtyMinuteExtension: false,
       selectedExtras: [],
     }),
   setSelectedSlotWindows: (slots: SelectedSlotWindow[]) => {
@@ -862,6 +932,7 @@ clearItems: () =>
       selectedSlotWindows: slots,
       selectedStartTime: span?.startTime ?? "",
       selectedEndTime: span?.endTime ?? "",
+      hasThirtyMinuteExtension: false,
       selectedExtras: [],
     });
   },
@@ -870,9 +941,24 @@ clearItems: () =>
       selectedSlotWindows: [],
       selectedStartTime: time,
       selectedEndTime: "",
+      hasThirtyMinuteExtension: false,
       selectedExtras: [],
     }),
-  setEndTime: (time: string) => set({ selectedEndTime: time }),
+  setEndTime: (time: string) =>
+    set({
+      selectedEndTime: time,
+      hasThirtyMinuteExtension: false,
+    }),
+  setThirtyMinuteExtension: (enabled: boolean) =>
+    set((state) => ({
+      hasThirtyMinuteExtension:
+        enabled && canUseThirtyMinuteExtensionWithItems(state.selectedItems),
+      checkoutUrl: null,
+      bookingId: null,
+      totalPrice: 0,
+      priceBreakdown: [],
+      extrasDetails: [],
+    })),
 
   // ── Step 3 ───────────────────────────────────────────────────────────────
   setAvailableExtras: (extras: Extra[]) => {
@@ -1239,6 +1325,9 @@ clearItems: () =>
 
     const resourceMap = get().resourceMap;
     const selectedItems = draft.selectedItems;
+    const canUseThirtyMinuteExtension =
+      draft.hasThirtyMinuteExtension &&
+      canUseThirtyMinuteExtensionWithItems(selectedItems);
 
     set({
       currentStep: getRestorableStep(draft),
@@ -1249,6 +1338,7 @@ clearItems: () =>
       selectedSlotWindows: draft.selectedSlotWindows,
       selectedStartTime: draft.selectedStartTime,
       selectedEndTime: draft.selectedEndTime,
+      hasThirtyMinuteExtension: canUseThirtyMinuteExtension,
       availableExtras: [],
       selectedExtras: draft.selectedExtras,
       customerInfo: { ...DEFAULT_CUSTOMER, ...draft.customerInfo },

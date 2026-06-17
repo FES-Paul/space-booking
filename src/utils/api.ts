@@ -103,6 +103,7 @@ export const fetchPricing = (params: {
   date: string;
   start_time: string;
   end_time: string;
+  has_thirty_min_extension?: boolean;
   extras?: SelectedExtra[];
   package_id?: number;
   package_ids?: number[];
@@ -122,6 +123,9 @@ export const fetchPricing = (params: {
   qs.set("date", params.date);
   qs.set("start_time", params.start_time);
   qs.set("end_time", params.end_time);
+  if (params.has_thirty_min_extension) {
+    qs.set("has_thirty_min_extension", "1");
+  }
   if (params.package_ids && params.package_ids.length > 0) {
     params.package_ids.forEach((id) => qs.append("package_ids[]", String(id)));
   } else if (params.package_id) {
@@ -159,6 +163,7 @@ export const createBooking = (payload: {
   date: string;
   start_time: string;
   end_time: string;
+  has_thirty_min_extension?: boolean;
   customer_name: string;
   customer_email: string;
   customer_phone?: string;

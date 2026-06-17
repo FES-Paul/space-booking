@@ -76,6 +76,21 @@ final class PackageMetaBox
                 value="<?php echo esc_attr($duration); ?>" class="small-text"></td>
     </tr>
     <tr>
+        <th><label for="sb_package_thirty_min_extension_enabled"><?php esc_html_e('30-Minute Add-on', 'space-booking'); ?></label></th>
+        <td>
+            <label style="display:flex;align-items:center;gap:8px;font-weight:400;">
+                <input type="checkbox" id="sb_package_thirty_min_extension_enabled" name="sb_package_thirty_min_extension_enabled" value="1"
+                    <?php checked((bool) get_post_meta($post->ID, '_sb_thirty_min_extension_enabled', true)); ?>>
+                <?php esc_html_e('Allow customers to add 30 minutes to this package booking.', 'space-booking'); ?>
+            </label>
+            <p style="margin-top:10px;">
+                <label for="sb_package_thirty_min_extension_price"><strong><?php printf(esc_html__('30-Minute Add-on Price (%s)', 'space-booking'), $symbol); ?></strong></label><br>
+                <input type="number" id="sb_package_thirty_min_extension_price" name="sb_package_thirty_min_extension_price" step="0.01" min="0"
+                    value="<?php echo esc_attr(get_post_meta($post->ID, '_sb_thirty_min_extension_price', true) ?: '0'); ?>" class="small-text">
+            </p>
+        </td>
+    </tr>
+    <tr>
         <th><label><?php esc_html_e('Included Extras', 'space-booking'); ?></label></th>
         <td>
             <?php foreach ($extras as $extra): ?>
@@ -310,6 +325,8 @@ final class PackageMetaBox
         $space_id = absint($_POST['sb_package_space_id'] ?? 0);
         update_post_meta($post_id, '_sb_package_space_id', $space_id);
         update_post_meta($post_id, '_sb_package_duration', (int) ($_POST['sb_package_duration'] ?? 0));
+        update_post_meta($post_id, '_sb_thirty_min_extension_enabled', !empty($_POST['sb_package_thirty_min_extension_enabled']) ? 1 : 0);
+        update_post_meta($post_id, '_sb_thirty_min_extension_price', max(0, (float) ($_POST['sb_package_thirty_min_extension_price'] ?? 0)));
 
         $extra_ids = array_map('absint', (array) ($_POST['sb_package_extra_ids'] ?? []));
         update_post_meta($post_id, '_sb_package_extra_ids', $extra_ids);

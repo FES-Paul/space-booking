@@ -32,6 +32,8 @@ export interface Space {
     hourly_rate: number;
   }> | null;
   gallery: string[];
+  thirty_min_extension_enabled: boolean;
+  thirty_min_extension_price: number;
   physicalSpaceIds?: number[]; // Cached footprint self + deps
 }
 
@@ -51,6 +53,8 @@ export interface Package {
   space_id: number;
   space_name: string | null;
   extra_ids: number[];
+  thirty_min_extension_enabled: boolean;
+  thirty_min_extension_price: number;
   space_ids?: number[]; // Multi-spaces for packages
   physicalSpaceIds?: number[]; // Cached footprint
   theme_meta_fields?: PackageThemeMetaField[];
@@ -150,8 +154,10 @@ export interface PricingResponse {
   base_price: number;
   modifier_price?: number;
   extras_price: number;
+  thirty_min_extension_price?: number;
   total_price: number;
   duration_hours: number;
+  effective_end_time?: string;
   breakdown: PriceBreakdownItem[];
   items?: PricingItemDetail[];
   extras_breakdown?: PriceBreakdownItem[];
@@ -195,6 +201,7 @@ declare module "@/utils/api" {
     marketing_source?: string;
     website_url?: string;
     form_started_at?: number;
+    has_thirty_min_extension?: boolean;
     extras?: SelectedExtra[];
   }
 }

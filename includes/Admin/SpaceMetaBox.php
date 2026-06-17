@@ -128,6 +128,10 @@ final class SpaceMetaBox
     flex: 1;
     min-width: 80px;
 }
+
+#sb_thirty_min_extension_enabled {
+    width: fit-content
+}
 </style>
 <div class="sb-meta-grid">
     <div class="sb-meta-field">
@@ -159,6 +163,14 @@ final class SpaceMetaBox
         <input type="number" id="sb_capacity" name="sb_capacity" min="0" value="<?php echo esc_attr($capacity); ?>">
     </div>
     <div class="sb-meta-field">
+        <label for="sb_thirty_min_extension_enabled"><?php esc_html_e('30-Minute Add-on', 'space-booking'); ?></label>
+        <label style="display:flex;align-items:center;gap:8px;font-weight:400;">
+            <input type="checkbox" id="sb_thirty_min_extension_enabled" name="sb_thirty_min_extension_enabled" value="1"
+                <?php checked((bool) get_post_meta($post->ID, '_sb_thirty_min_extension_enabled', true)); ?>>
+            <?php esc_html_e('Allow customers to add 30 minutes to this booking.', 'space-booking'); ?>
+        </label>
+    </div>
+    <div class="sb-meta-field">
         <label for="sb_min_duration"><?php esc_html_e('Min Duration (hours)', 'space-booking'); ?></label>
         <input type="number" id="sb_min_duration" name="sb_min_duration" min="1" max="24"
             value="<?php echo esc_attr($min_dur); ?>">
@@ -173,6 +185,14 @@ final class SpaceMetaBox
         <input type="number" id="sb_buffer_pre" name="sb_buffer_pre" min="0"
             value="<?php echo esc_attr(get_post_meta($post->ID, '_sb_buffer_pre_minutes', true) ?: ''); ?>">
         <p class="description"><?php esc_html_e('Overrides global. 0 = use global.', 'space-booking'); ?></p>
+    </div>
+    <div class="sb-meta-field">
+        <label
+            for="sb_thirty_min_extension_price"><?php printf(esc_html__('30-Minute Add-on Price (%s)', 'space-booking'), $symbol); ?></label>
+        <input type="number" id="sb_thirty_min_extension_price" name="sb_thirty_min_extension_price" step="0.01" min="0"
+            value="<?php echo esc_attr(get_post_meta($post->ID, '_sb_thirty_min_extension_price', true) ?: '0'); ?>">
+        <p class="description">
+            <?php esc_html_e('Used only when the 30-minute add-on is enabled for this space.', 'space-booking'); ?></p>
     </div>
     <div class="sb-meta-field">
         <label for="sb_buffer_post"><?php esc_html_e('Post-Event Buffer (minutes)', 'space-booking'); ?></label>
@@ -583,6 +603,8 @@ jQuery(document).ready(function($) {
         update_post_meta($post_id, '_sb_max_duration', (int) ($_POST['sb_max_duration'] ?? 8));
         update_post_meta($post_id, '_sb_default_duration', (int) ($_POST['sb_default_duration'] ?? 0));
         update_post_meta($post_id, '_sb_capacity', (int) ($_POST['sb_capacity'] ?? 0));
+        update_post_meta($post_id, '_sb_thirty_min_extension_enabled', !empty($_POST['sb_thirty_min_extension_enabled']) ? 1 : 0);
+        update_post_meta($post_id, '_sb_thirty_min_extension_price', max(0, (float) ($_POST['sb_thirty_min_extension_price'] ?? 0)));
         update_post_meta($post_id, '_sb_buffer_pre_minutes', (int) ($_POST['sb_buffer_pre'] ?? 0));
         update_post_meta($post_id, '_sb_buffer_post_minutes', (int) ($_POST['sb_buffer_post'] ?? 0));
 

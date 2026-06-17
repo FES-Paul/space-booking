@@ -56,6 +56,8 @@ const mockSpace = {
   day_overrides: {},
   price_overrides: null,
   gallery: [],
+  thirty_min_extension_enabled: true,
+  thirty_min_extension_price: 30,
 };
 
 const mockPackage = {
@@ -68,6 +70,8 @@ const mockPackage = {
   space_id: 224,
   space_name: "Test Space",
   extra_ids: [1, 2],
+  thirty_min_extension_enabled: true,
+  thirty_min_extension_price: 45,
 };
 
 const mockExtra = {
@@ -613,6 +617,34 @@ describe("Pricing API", () => {
         expect.any(Object),
       );
     });
+
+    it("should include the 30-minute extension flag when enabled", async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            base_price: 100,
+            extras_price: 0,
+            total_price: 130,
+            duration_hours: 2.5,
+            breakdown: [],
+          }),
+      });
+
+      await fetchPricing({
+        space_id: 224,
+        item_ids: [224],
+        date: "2026-05-10",
+        start_time: "10:00",
+        end_time: "12:00",
+        has_thirty_min_extension: true,
+      });
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("has_thirty_min_extension=1"),
+        expect.any(Object),
+      );
+    });
   });
 });
 
@@ -639,7 +671,8 @@ describe("Booking API", () => {
       });
 
       const result = await createBooking({
-        space_id: 224,
+        space_ids: [224],
+        package_ids: [],
         selected_item_ids: [224],
         date: "2026-05-10",
         start_time: "10:00",
@@ -672,7 +705,8 @@ describe("Booking API", () => {
       });
 
       await createBooking({
-        space_id: 224,
+        space_ids: [224],
+        package_ids: [],
         selected_item_ids: [224],
         date: "2026-05-10",
         start_time: "10:00",
@@ -708,7 +742,8 @@ describe("Booking API", () => {
       });
 
       const result = await createBooking({
-        space_id: 224,
+        space_ids: [224],
+        package_ids: [],
         selected_item_ids: [224],
         date: "2026-05-10",
         start_time: "10:00",
@@ -723,6 +758,38 @@ describe("Booking API", () => {
       });
 
       expect(result.breakdown).toHaveLength(3);
+    });
+
+    it("should include the 30-minute extension flag in the booking payload", async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            booking_id: 126,
+            checkout_url: "/checkout/126",
+            total_price: 180,
+            breakdown: [],
+          }),
+      });
+
+      await createBooking({
+        space_ids: [224],
+        package_ids: [],
+        selected_item_ids: [224],
+        date: "2026-05-10",
+        start_time: "10:00",
+        end_time: "12:00",
+        has_thirty_min_extension: true,
+        customer_name: "Extended Booking",
+        customer_email: "extended@example.com",
+      });
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          body: expect.stringContaining('"has_thirty_min_extension":true'),
+        }),
+      );
     });
   });
 });

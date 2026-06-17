@@ -11,6 +11,8 @@ const selectedPackage: SelectionItem = {
   space_id: 11,
   space_name: "Studio A",
   extra_ids: [7],
+  thirty_min_extension_enabled: true,
+  thirty_min_extension_price: 350,
   space_ids: [11, 12],
   type: "package",
 };
@@ -28,6 +30,8 @@ const selectedSpace: SelectionItem = {
   day_overrides: {},
   price_overrides: null,
   gallery: [],
+  thirty_min_extension_enabled: false,
+  thirty_min_extension_price: 0,
   type: "space",
 };
 
@@ -44,6 +48,7 @@ const draftPayload = {
   ],
   selectedStartTime: "10:00",
   selectedEndTime: "12:00",
+  hasThirtyMinuteExtension: true,
   selectedExtras: [{ extra_id: 7, quantity: 2 }],
   customerInfo: {
     name: "Alice Example",
@@ -97,6 +102,7 @@ describe("bookingStore draft persistence", () => {
     expect(state.selectedDate).toBe("2026-06-28");
     expect(state.selectedStartTime).toBe("10:00");
     expect(state.selectedEndTime).toBe("12:00");
+    expect(state.hasThirtyMinuteExtension).toBe(true);
     expect(state.selectedExtras).toEqual([{ extra_id: 7, quantity: 2 }]);
     expect(state.customerInfo).toMatchObject({
       name: "Alice Example",
@@ -177,6 +183,34 @@ describe("bookingStore draft persistence", () => {
     });
 
     expect(localStorage.getItem(storageKey)).toBeNull();
+  });
+
+  it("clears the 30-minute extension when the schedule changes", async () => {
+    const storeModule = await loadStoreModule();
+    const store = storeModule.useBookingStore;
+
+    store.setState(draftPayload);
+    expect(store.getState().hasThirtyMinuteExtension).toBe(true);
+
+    store.getState().setDate("2026-06-29");
+
+    const state = store.getState();
+    expect(state.selectedDate).toBe("2026-06-29");
+    expect(state.hasThirtyMinuteExtension).toBe(false);
+  });
+
+  it("drops the 30-minute extension when a non-supported item is added", async () => {
+    const storeModule = await loadStoreModule();
+    const store = storeModule.useBookingStore;
+
+    store.setState(draftPayload);
+    expect(store.getState().hasThirtyMinuteExtension).toBe(true);
+
+    store.getState().addItem(selectedSpace);
+
+    const state = store.getState();
+    expect(state.selectedItems).toEqual([selectedPackage, selectedSpace]);
+    expect(state.hasThirtyMinuteExtension).toBe(false);
   });
 
   it("removes package-linked extras and answers while keeping unrelated review data", async () => {

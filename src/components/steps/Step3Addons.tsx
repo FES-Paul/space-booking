@@ -15,7 +15,12 @@ export function Step3Addons() {
     selectedDate,
     selectedStartTime,
     selectedEndTime,
+    hasThirtyMinuteExtension,
     selectedExtras,
+    canUseThirtyMinuteExtension,
+    getThirtyMinuteExtensionPrice,
+    getEffectiveEndTime,
+    setThirtyMinuteExtension,
     toggleExtra,
     setAvailableExtras,
     setPriceBreakdown,
@@ -56,16 +61,19 @@ export function Step3Addons() {
     (item) => item.type === "package",
   ) as Package[];
   const selectedItemTitles = selectedItems.map((item) => item.title);
+  const thirtyMinuteExtensionAvailable = canUseThirtyMinuteExtension();
+  const thirtyMinuteExtensionPrice = getThirtyMinuteExtensionPrice();
+  const effectiveEndTime = getEffectiveEndTime();
 
   useEffect(() => {
-    if (!spaceId || !selectedDate || !selectedStartTime || !selectedEndTime) {
+    if (!spaceId || !selectedDate || !selectedStartTime || !effectiveEndTime) {
       return;
     }
 
     setLoading(true);
     setError("");
 
-    fetchExtras(spaceId, selectedDate, selectedStartTime, selectedEndTime)
+    fetchExtras(spaceId, selectedDate, selectedStartTime, effectiveEndTime)
       .then((data) => {
         setExtras(data);
         setAvailableExtras(data);
@@ -78,7 +86,7 @@ export function Step3Addons() {
     spaceId,
     selectedDate,
     selectedStartTime,
-    selectedEndTime,
+    effectiveEndTime,
     setAvailableExtras,
   ]);
 
@@ -98,6 +106,7 @@ export function Step3Addons() {
       date: selectedDate,
       start_time: selectedStartTime,
       end_time: selectedEndTime,
+      has_thirty_min_extension: hasThirtyMinuteExtension,
       extras: selectedExtras,
       package_ids: packageIds,
     })
@@ -114,6 +123,7 @@ export function Step3Addons() {
   }, [
     selectedDate,
     selectedEndTime,
+    hasThirtyMinuteExtension,
     selectedExtras,
     selectedItems,
     selectedStartTime,
@@ -143,6 +153,31 @@ export function Step3Addons() {
   return (
     <div className="sb-step sb-step-3">
       <h2 className="sb-step__title">Add-ons & Extras</h2>
+
+      {thirtyMinuteExtensionAvailable && (
+        <div className="sb-special-addon">
+          <label className="sb-special-addon__label">
+            <input
+              type="checkbox"
+              checked={hasThirtyMinuteExtension}
+              onChange={(event) =>
+                setThirtyMinuteExtension(event.target.checked)
+              }
+            />
+            <span className="sb-special-addon__content">
+              <strong>30-Minute Booking Extension</strong>
+              <span>Adds 30 minutes to the end of this booking.</span>
+              <span>
+                Price: {window.sbConfig.symbol}
+                {thirtyMinuteExtensionPrice.toFixed(2)}
+              </span>
+              {hasThirtyMinuteExtension && (
+                <span>Booking time will end at {effectiveEndTime}.</span>
+              )}
+            </span>
+          </label>
+        </div>
+      )}
 
       {loading && <div className="sb-loading">Loading extras…</div>}
       {error && <div className="sb-error">{error}</div>}

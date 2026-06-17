@@ -115,6 +115,8 @@ final class SpaceController extends WP_REST_Controller
 			'day_overrides' => is_array($day_overrides) ? $day_overrides : [],
 			'price_overrides' => $this->get_price_overrides($post->ID),
 			'gallery' => $this->get_gallery($post->ID),
+			'thirty_min_extension_enabled' => !empty($meta['_sb_thirty_min_extension_enabled'][0]),
+			'thirty_min_extension_price' => (float) ($meta['_sb_thirty_min_extension_price'][0] ?? 0),
 		];
 	}
 
@@ -137,6 +139,8 @@ final class SpaceController extends WP_REST_Controller
 			'space_id' => $space_id,
 			'space_name' => $space_id ? get_the_title($space_id) : null,
 			'extra_ids' => is_array($extra_ids) ? $extra_ids : [],
+			'thirty_min_extension_enabled' => (bool) get_post_meta($post->ID, '_sb_thirty_min_extension_enabled', true),
+			'thirty_min_extension_price' => (float) get_post_meta($post->ID, '_sb_thirty_min_extension_price', true),
 			'space_ids' => $space_id ? [$space_id] : [],
 			'theme_meta_fields' => $theme_meta_fields,
 		];
