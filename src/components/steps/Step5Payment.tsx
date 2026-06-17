@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useBookingStore } from "@/store/bookingStore";
+import { useBookingStore, type MergedExtra } from "@/store/bookingStore";
 import { checkCartHasBooking, createBooking, fetchPricing } from "@/utils/api";
 import { formatBookingDate } from "@/utils/date";
 import type { Package, Space, SelectionItem } from "@/types";
@@ -28,6 +28,11 @@ export function Step5Payment() {
     selectedItems,
     packageQuestionAnswers,
     setHasCartBooking,
+    removeItem,
+    removeReviewExtra,
+    setStep,
+    extrasDetails,
+    getMergedExtras,
   } = useBookingStore();
 
   const [loading, setLoading] = useState(false);
@@ -362,6 +367,43 @@ export function Step5Payment() {
     return "No space selected";
   };
 
+  const getSelectionReviewMeta = (item: SelectionItem): string => {
+    if (item.type === "space") {
+      return "Standalone space selection";
+    }
+
+    const packageSpaceIds = getPackageSpaceIds(item);
+    const packageSpaces = packageSpaceIds.map((spaceId, index) =>
+      index === 0 ? item.space_name || `Space #${spaceId}` : `Space #${spaceId}`,
+    );
+    const extraCount = Array.isArray(item.extra_ids) ? item.extra_ids.length : 0;
+    const parts = [
+      packageSpaces.length > 0
+        ? `Includes ${packageSpaces.join(", ")}`
+        : "Package selection",
+    ];
+
+    if (extraCount > 0) {
+      parts.push(`${extraCount} included ${extraCount === 1 ? "extra" : "extras"}`);
+    }
+
+    return parts.join(" | ");
+  };
+
+  const getExtraReviewMeta = (extra: MergedExtra): string => {
+    if (extra.included_qty > 0 && extra.paid_qty > 0) {
+      return `${extra.included_qty} included, ${extra.paid_qty} additional charged`;
+    }
+
+    if (extra.included_qty > 0) {
+      return `${extra.included_qty} included with package`;
+    }
+
+    return `Qty ${extra.total_qty}`;
+  };
+
+  const reviewExtras: MergedExtra[] =
+    extrasDetails.length > 0 ? extrasDetails : getMergedExtras();
   const formattedSelectedDate = formatBookingDate(selectedDate);
 
   return (
@@ -374,6 +416,30 @@ export function Step5Payment() {
           <div className="sb-summary-row"><span>Date</span><span>{formattedSelectedDate || selectedDate}</span></div>
           <div className="sb-summary-row"><span>Time</span><span>{formatTimeTo12Hour(selectedStartTime)} – {formatTimeTo12Hour(selectedEndTime)}</span></div>
         </div>
+
+        <h4>Manage Selection</h4>
+        <ul className="sb-review-edit-list">
+          {selectedItems.map((item) => (
+            <li key={`${item.type}-${item.id}`} className="sb-review-edit__item">
+              <div className="sb-review-edit__details">
+                <div className="sb-review-edit__title">{item.title}</div>
+                <div className="sb-review-edit__meta">{getSelectionReviewMeta(item)}</div>
+              </div>
+              <button
+                type="button"
+                className="sb-btn sb-btn--ghost sb-review-edit__action"
+                onClick={() => removeItem(Number(item.id))}
+              >
+                {item.type === "package" ? "Remove package" : "Remove space"}
+              </button>
+            </li>
+          ))}
+        </ul>
+        {selectedItems.some((item) => item.type === "package") && (
+          <p className="sb-review-edit__note">
+            Removing a package also removes its included extras, package answers, and related charges.
+          </p>
+        )}
 
         {selectedSlotSpan && (
           <>
@@ -420,9 +486,47 @@ export function Step5Payment() {
           </>
         )}
 
+        {reviewExtras.length > 0 && (
+          <>
+            <h4>Selected Extras</h4>
+            <ul className="sb-review-edit-list">
+              {reviewExtras.map((extra) => (
+                <li key={extra.extra_id} className="sb-review-edit__item">
+                  <div className="sb-review-edit__details">
+                    <div className="sb-review-edit__title">{extra.title}</div>
+                    <div className="sb-review-edit__meta">{getExtraReviewMeta(extra)}</div>
+                  </div>
+                  {extra.is_locked ? (
+                    <span className="sb-review-edit__hint">
+                      Included with package. Remove the package to remove this.
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="sb-btn sb-btn--ghost sb-review-edit__action"
+                      onClick={() => removeReviewExtra(extra.extra_id)}
+                    >
+                      {extra.included_qty > 0 ? "Remove add-on charge" : "Remove extra"}
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+
         {packageQuestionReviewRows.length > 0 && (
           <>
-            <h4>Package Answers</h4>
+            <div className="sb-review-section__header">
+              <h4>Package Answers</h4>
+              <button
+                type="button"
+                className="sb-btn sb-btn--ghost sb-review-edit__action"
+                onClick={() => setStep(4)}
+              >
+                Change answers
+              </button>
+            </div>
             <ul className="sb-breakdown">
               {packageQuestionReviewRows.map((row, i) => (
                 <li key={`${row.label}-${i}`} className="sb-breakdown__item">
@@ -431,6 +535,9 @@ export function Step5Payment() {
                 </li>
               ))}
             </ul>
+            <p className="sb-review-edit__note">
+              Package answers cannot be removed here. Change them in the package questions step.
+            </p>
           </>
         )}
 

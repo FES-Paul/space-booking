@@ -15,6 +15,22 @@ const selectedPackage: SelectionItem = {
   type: "package",
 };
 
+const selectedSpace: SelectionItem = {
+  id: 99,
+  title: "Studio B",
+  description: "Standalone space",
+  excerpt: "",
+  thumbnail: null,
+  hourly_rate: 1200,
+  min_duration: 1,
+  max_duration: 8,
+  capacity: 20,
+  day_overrides: {},
+  price_overrides: null,
+  gallery: [],
+  type: "space",
+};
+
 const draftPayload = {
   currentStep: 6 as const,
   selectedItems: [selectedPackage],
@@ -161,5 +177,97 @@ describe("bookingStore draft persistence", () => {
     });
 
     expect(localStorage.getItem(storageKey)).toBeNull();
+  });
+
+  it("removes package-linked extras and answers while keeping unrelated review data", async () => {
+    const storeModule = await loadStoreModule();
+    const store = storeModule.useBookingStore;
+
+    store.setState({
+      ...draftPayload,
+      selectedItems: [selectedPackage, selectedSpace],
+      selectedExtras: [
+        { extra_id: 7, quantity: 2, included: true },
+        { extra_id: 21, quantity: 1, included: false },
+      ],
+      priceBreakdown: [
+        { label: "Celebration Package", amount: 2500 },
+        { label: "Additional projector", amount: 300 },
+      ],
+      totalPrice: 2800,
+    });
+
+    store.getState().removeItem(55);
+
+    const state = store.getState();
+    expect(state.currentStep).toBe(6);
+    expect(state.selectedItems).toEqual([selectedSpace]);
+    expect(state.selectedExtras).toEqual([{ extra_id: 21, quantity: 1, included: false }]);
+    expect(state.packageQuestionAnswers).toEqual({});
+    expect(state.priceBreakdown).toEqual([]);
+    expect(state.totalPrice).toBe(0);
+  });
+
+  it("returns to step 1 and clears booking-specific selections when the last item is removed", async () => {
+    const storeModule = await loadStoreModule();
+    const store = storeModule.useBookingStore;
+
+    store.setState({
+      ...draftPayload,
+      selectedExtras: [{ extra_id: 7, quantity: 2, included: true }],
+      priceBreakdown: [{ label: "Celebration Package", amount: 2500 }],
+      totalPrice: 2500,
+    });
+
+    store.getState().removeItem(55);
+
+    const state = store.getState();
+    expect(state.currentStep).toBe(1);
+    expect(state.selectedItems).toEqual([]);
+    expect(state.selectedDate).toBe("");
+    expect(state.selectedSlotWindows).toEqual([]);
+    expect(state.selectedStartTime).toBe("");
+    expect(state.selectedEndTime).toBe("");
+    expect(state.selectedExtras).toEqual([]);
+    expect(state.packageQuestionAnswers).toEqual({});
+  });
+
+  it("removes only the paid portion of an included extra from review", async () => {
+    const storeModule = await loadStoreModule();
+    const store = storeModule.useBookingStore;
+
+    store.setState({
+      ...draftPayload,
+      selectedExtras: [{ extra_id: 7, quantity: 3, included: true }],
+      priceBreakdown: [{ label: "Additional balloons", amount: 400 }],
+      totalPrice: 2900,
+    });
+
+    store.getState().removeReviewExtra(7);
+
+    const state = store.getState();
+    expect(state.selectedExtras).toEqual([{ extra_id: 7, quantity: 1, included: true }]);
+    expect(state.priceBreakdown).toEqual([]);
+    expect(state.totalPrice).toBe(0);
+  });
+
+  it("removes a standalone extra entirely from review", async () => {
+    const storeModule = await loadStoreModule();
+    const store = storeModule.useBookingStore;
+
+    store.setState({
+      ...draftPayload,
+      selectedExtras: [{ extra_id: 21, quantity: 1, included: false }],
+      packageQuestionAnswers: {},
+      priceBreakdown: [{ label: "Projector", amount: 250 }],
+      totalPrice: 2750,
+    });
+
+    store.getState().removeReviewExtra(21);
+
+    const state = store.getState();
+    expect(state.selectedExtras).toEqual([]);
+    expect(state.priceBreakdown).toEqual([]);
+    expect(state.totalPrice).toBe(0);
   });
 });

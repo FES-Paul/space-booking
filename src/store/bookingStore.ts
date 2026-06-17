@@ -25,6 +25,8 @@ interface PackageCoverage {
   coveredSpaceIds: number[];
 }
 
+type SelectedPackageItem = Extract<SelectionItem, { type: "package" }>;
+
 // Helper: Compute locked resource IDs from selected items
 const computeLockedResourceIds = (
   items: SelectionItem[],
@@ -96,6 +98,7 @@ interface BookingState {
   setIncludedExtras: (extraIds: number[]) => void;
   toggleItem: (item: Space | Package) => void;
   toggleExtra: (extra_id: number, quantity?: number, included?: boolean) => void;
+  removeReviewExtra: (extra_id: number) => void;
   incrementExtra: (extra_id: number) => void;
   decrementExtra: (extra_id: number) => void;
   setCustomerField: (key: string, value: CustomerValue) => void;
@@ -171,9 +174,12 @@ const createInitialBookingState = () => ({
   hasCartBooking: false,
 });
 
+const isPackageSelection = (item: SelectionItem): item is SelectedPackageItem =>
+  item.type === "package";
+
 const buildPackageCoverage = (items: SelectionItem[]): PackageCoverage[] =>
   items
-    .filter((item): item is Extract<SelectionItem, { type: "package" }> => item.type === "package")
+    .filter(isPackageSelection)
     .map((pkg) => {
       const coveredSpaceIds = Array.isArray(pkg.space_ids) && pkg.space_ids.length > 0
         ? pkg.space_ids.map((id) => Number(id)).filter((id) => id > 0)
@@ -188,6 +194,147 @@ const buildPackageCoverage = (items: SelectionItem[]): PackageCoverage[] =>
       };
     })
     .filter((pkg) => pkg.coveredSpaceIds.length > 0);
+
+const getPackageExtraIds = (pkg: SelectedPackageItem): number[] =>
+  Array.isArray(pkg.extra_ids)
+    ? pkg.extra_ids.map((id) => Number(id)).filter((id) => id > 0)
+    : [];
+
+const getIncludedExtraQtyMap = (items: SelectionItem[]): Map<number, number> => {
+  const includedQtyMap = new Map<number, number>();
+
+  items.filter(isPackageSelection).forEach((pkg) => {
+    getPackageExtraIds(pkg).forEach((extraId) => {
+      const current = includedQtyMap.get(extraId) ?? 0;
+      includedQtyMap.set(extraId, Math.max(current, 1));
+    });
+  });
+
+  return includedQtyMap;
+};
+
+const getPackageIdFromAnswerKey = (answerKey: string): number | null => {
+  const match = /^pkg_(\d+)__/.exec(answerKey);
+  if (!match) return null;
+
+  const packageId = Number(match[1]);
+  return Number.isFinite(packageId) ? packageId : null;
+};
+
+const stripPackageQuestionAnswers = (
+  answers: Record<string, PackageQuestionAnswerValue>,
+  removedPackageIds: Set<number>,
+): Record<string, PackageQuestionAnswerValue> =>
+  Object.fromEntries(
+    Object.entries(answers).filter(([answerKey]) => {
+      const packageId = getPackageIdFromAnswerKey(answerKey);
+      return packageId === null || !removedPackageIds.has(packageId);
+    }),
+  );
+
+const hasPackageQuestionEntries = (items: SelectionItem[]): boolean =>
+  items.some((item) => {
+    if (!isPackageSelection(item)) return false;
+    return Array.isArray(item.theme_meta_fields) && item.theme_meta_fields.length > 0;
+  });
+
+type SelectionRemovalContext = Pick<
+  BookingState,
+  | "currentStep"
+  | "selectedItems"
+  | "resourceMap"
+  | "selectedExtras"
+  | "packageQuestionAnswers"
+>;
+
+const createSelectionRemovalPatch = (
+  state: SelectionRemovalContext,
+  itemId: number,
+): Partial<BookingState> => {
+  const removedItem = state.selectedItems.find((item) => Number(item.id) === Number(itemId));
+  if (!removedItem) return {};
+
+  const selectedItems = state.selectedItems.filter(
+    (item) => Number(item.id) !== Number(itemId),
+  );
+  const packageCoverage = buildPackageCoverage(selectedItems);
+  const lockedResourceIds = computeLockedResourceIds(selectedItems, state.resourceMap);
+
+  const removedPackageIds = new Set<number>();
+  const removedPackageExtraIds = new Set<number>();
+
+  if (isPackageSelection(removedItem)) {
+    removedPackageIds.add(Number(removedItem.id));
+    getPackageExtraIds(removedItem).forEach((extraId) => {
+      removedPackageExtraIds.add(extraId);
+    });
+  }
+
+  const remainingIncludedExtraQty = getIncludedExtraQtyMap(selectedItems);
+  const selectedExtras = state.selectedExtras.flatMap((selectedExtra) => {
+    if (!removedPackageExtraIds.has(selectedExtra.extra_id)) {
+      return [selectedExtra];
+    }
+
+    const includedQty = remainingIncludedExtraQty.get(selectedExtra.extra_id) ?? 0;
+    if (includedQty > 0) {
+      return [
+        {
+          extra_id: selectedExtra.extra_id,
+          quantity: includedQty,
+          included: true,
+        },
+      ];
+    }
+
+    return [];
+  });
+
+  const packageQuestionAnswers = stripPackageQuestionAnswers(
+    state.packageQuestionAnswers,
+    removedPackageIds,
+  );
+
+  if (selectedItems.length === 0) {
+    return {
+      currentStep: 1,
+      selectedItems,
+      lockedResourceIds,
+      packageCoverage,
+      selectedDate: "",
+      selectedSlotWindows: [],
+      selectedStartTime: "",
+      selectedEndTime: "",
+      availableExtras: [],
+      selectedExtras: [],
+      packageQuestionAnswers: {},
+      checkoutUrl: null,
+      bookingId: null,
+      totalPrice: 0,
+      priceBreakdown: [],
+      extrasDetails: [],
+    };
+  }
+
+  const nextStep =
+    state.currentStep === 4 && !hasPackageQuestionEntries(selectedItems)
+      ? 5
+      : state.currentStep;
+
+  return {
+    currentStep: nextStep,
+    selectedItems,
+    lockedResourceIds,
+    packageCoverage,
+    selectedExtras,
+    packageQuestionAnswers,
+    checkoutUrl: null,
+    bookingId: null,
+    totalPrice: 0,
+    priceBreakdown: [],
+    extrasDetails: [],
+  };
+};
 
 const hasCustomerInfo = (customerInfo: CustomerInfo): boolean =>
   Object.values(customerInfo).some((value) => {
@@ -434,20 +581,14 @@ export const useBookingStore = create<BookingState>()((set, get) => ({
       state.selectedItems.map((i) => i.id),
     );
     console.log("current locked:", state.lockedResourceIds);
-    if (!state.resourceMap) {
-      console.log("no resourceMap, return");
-      return;
-    }
-    const map = state.resourceMap;
-    const newSelected = state.selectedItems.filter((i) => i.id !== id);
-    const newLocked = computeLockedResourceIds(newSelected, map);
+    const nextState = createSelectionRemovalPatch(state, id);
     console.log(
       "setting new selected:",
-      newSelected.map((i) => i.id),
+      (nextState.selectedItems ?? []).map((i) => i.id),
       "new locked:",
-      newLocked,
+      nextState.lockedResourceIds ?? [],
     );
-    set({ selectedItems: newSelected, lockedResourceIds: newLocked });
+    set(nextState);
     console.log("removeItem done");
   },
 
@@ -463,38 +604,23 @@ export const useBookingStore = create<BookingState>()((set, get) => ({
     console.log("  current packageCoverage:", state.packageCoverage);
     console.log("  current selectedItems:", state.selectedItems.map(i => i.id));
 
-// Check if this is a package (has space_ids)
-    const isPackage = "space_ids" in item && 
-      Array.isArray(item.space_ids) && 
-      item.space_ids.length > 0;
-    const packageSpaceIds = isPackage ? item.space_ids! : [];
+    const isPackage = "space_id" in item || ("space_ids" in item && Array.isArray(item.space_ids));
+    const packageSpaceIds = isPackage
+      ? Array.isArray(item.space_ids) && item.space_ids.length > 0
+        ? item.space_ids.map((spaceId) => Number(spaceId)).filter((spaceId) => spaceId > 0)
+        : "space_id" in item && item.space_id
+          ? [Number(item.space_id)]
+          : []
+      : [];
     const itemTitle = item.title || "Item";
     
     console.log("  isPackage:", isPackage, "space_ids:", packageSpaceIds);
 
     if (isSelected) {
-      // REMOVAL - remove from both selectedItems and packageCoverage
-      const updatedItems = state.selectedItems.filter(
-        (i) => Number(i.id) !== targetId,
-      );
-      
-      // Also remove from packageCoverage if it was a package
-      let newPackageCoverage = state.packageCoverage;
-      if (isPackage) {
-        newPackageCoverage = state.packageCoverage.filter(
-          (pc) => pc.packageId !== targetId,
-        );
-      }
-
-      const newLocked = computeLockedResourceIds(updatedItems, state.resourceMap);
-      set({ 
-        selectedItems: updatedItems, 
-        lockedResourceIds: newLocked,
-        packageCoverage: newPackageCoverage 
-      });
+      set(createSelectionRemovalPatch(state, targetId));
 
       console.log(`Unselected: ${targetId}. Re-computing locks...`);
-} else {
+    } else {
       // ADDITION - with mutual exclusivity checks
       if (!state.resourceMap) {
         alert("Resource map loading...");
@@ -599,7 +725,25 @@ export const useBookingStore = create<BookingState>()((set, get) => ({
       console.log(`Selected: ${targetId}. Updating locks...`);
     }
   },
-clearItems: () => set({ selectedItems: [], lockedResourceIds: [], packageCoverage: [] }),
+clearItems: () =>
+    set({
+      currentStep: 1,
+      selectedItems: [],
+      lockedResourceIds: [],
+      packageCoverage: [],
+      selectedDate: "",
+      selectedSlotWindows: [],
+      selectedStartTime: "",
+      selectedEndTime: "",
+      availableExtras: [],
+      selectedExtras: [],
+      packageQuestionAnswers: {},
+      checkoutUrl: null,
+      bookingId: null,
+      totalPrice: 0,
+      priceBreakdown: [],
+      extrasDetails: [],
+    }),
   getPrimarySpaceId: () => {
     const state = get();
     if (state.selectedItems.length === 0) return null;
@@ -637,25 +781,11 @@ clearItems: () => set({ selectedItems: [], lockedResourceIds: [], packageCoverag
   // NEW: Merged extras selector - computes included/paid split for UI
   getMergedExtras: (): MergedExtra[] => {
     const state = get();
-    const { selectedExtras, availableExtras, packageCoverage } = state;
+    const { selectedExtras, availableExtras } = state;
     
     if (selectedExtras.length === 0) return [];
     
-    // Build included_qty map from all selected packages (highest wins)
-    const includedQtyMap = new Map<number, number>();
-    for (const pkg of packageCoverage) {
-      // We need to fetch package extra_ids - for now, use selectedItems
-      const pkgItem = state.selectedItems.find(
-        (i) => i.type === "package" && Number(i.id) === pkg.packageId,
-      );
-      if (pkgItem && "extra_ids" in pkgItem && Array.isArray(pkgItem.extra_ids)) {
-        for (const extraId of pkgItem.extra_ids) {
-          const current = includedQtyMap.get(extraId) ?? 0;
-          // Each package includes 1 of each extra by default
-          includedQtyMap.set(extraId, Math.max(current, 1));
-        }
-      }
-    }
+    const includedQtyMap = getIncludedExtraQtyMap(state.selectedItems);
     
     // Build merged extras array
     const merged: MergedExtra[] = [];
@@ -799,6 +929,37 @@ clearItems: () => set({ selectedItems: [], lockedResourceIds: [], packageCoverag
     console.groupEnd();
   },
 
+  removeReviewExtra: (extra_id: number) =>
+    set((state) => {
+      const existing = state.selectedExtras.find((extra) => extra.extra_id === extra_id);
+      if (!existing) return {};
+
+      const includedQty = getIncludedExtraQtyMap(state.selectedItems).get(extra_id) ?? 0;
+      const selectedExtras =
+        includedQty > 0
+          ? existing.quantity <= includedQty
+            ? state.selectedExtras
+            : state.selectedExtras.map((extra) =>
+                extra.extra_id === extra_id
+                  ? { ...extra, quantity: includedQty, included: true }
+                  : extra,
+              )
+          : state.selectedExtras.filter((extra) => extra.extra_id !== extra_id);
+
+      if (selectedExtras === state.selectedExtras) {
+        return {};
+      }
+
+      return {
+        selectedExtras,
+        checkoutUrl: null,
+        bookingId: null,
+        totalPrice: 0,
+        priceBreakdown: [],
+        extrasDetails: [],
+      };
+    }),
+
   // Increment extra quantity by 1
   incrementExtra: (extra_id: number) => {
     const current = get().selectedExtras;
@@ -820,21 +981,7 @@ clearItems: () => set({ selectedItems: [], lockedResourceIds: [], packageCoverag
     const exists = current.find((e) => e.extra_id === extra_id);
     if (!exists) return;
 
-    // Get included_qty for this extra from packageCoverage
-    const { packageCoverage, selectedItems } = get();
-    let includedQty = 0;
-    
-    // Find included_qty from packages
-    for (const pkg of packageCoverage) {
-      const pkgItem = selectedItems.find(
-        (i) => i.type === "package" && Number(i.id) === pkg.packageId
-      );
-      if (pkgItem && "extra_ids" in pkgItem && Array.isArray(pkgItem.extra_ids)) {
-        if (pkgItem.extra_ids.includes(extra_id)) {
-          includedQty = Math.max(includedQty, 1);
-        }
-      }
-    }
+    const includedQty = getIncludedExtraQtyMap(get().selectedItems).get(extra_id) ?? 0;
 
     // Can't go below included_qty
     if (exists.quantity <= includedQty) {
