@@ -39,6 +39,22 @@ const computeLockedResourceIds = (
   return Array.from(locked);
 };
 
+interface PersistedBookingDraft {
+  version: 1;
+  currentStep: BookingStep;
+  selectedItems: SelectionItem[];
+  selectedDate: string;
+  selectedSlotWindows: SelectedSlotWindow[];
+  selectedStartTime: string;
+  selectedEndTime: string;
+  selectedExtras: SelectedExtra[];
+  customerInfo: CustomerInfo;
+  packageQuestionAnswers: Record<string, PackageQuestionAnswerValue>;
+}
+
+const DRAFT_STORAGE_PREFIX = "sb-booking-draft:";
+const MAX_DRAFT_STEP: BookingStep = 6;
+
 interface BookingState {
   bookingPolicy: string;
   currentStep: BookingStep;
@@ -109,6 +125,8 @@ interface BookingState {
   getAllPackageIds: () => number[];
   getCoveredSpaceIds: () => number[];
   setHasCartBooking: (has: boolean) => void;
+  hydrateDraft: () => boolean;
+  clearDraft: () => void;
   reset: () => void;
   setBookingPolicy: (policy: string) => void;
   getMergedExtras: () => MergedExtra[];
@@ -127,31 +145,197 @@ export interface MergedExtra {
 
 const DEFAULT_CUSTOMER: CustomerInfo = {};
 
-export const useBookingStore = create<BookingState>()((set, get) => ({
-  // ── Initial state ────────────────────────────────────────────────────────
-  currentStep: 1,
+const createInitialBookingState = () => ({
+  currentStep: 1 as BookingStep,
   bookingPolicy: "",
-  selectedItems: [],
-  lockedResourceIds: [],
-  resourceMap: null,
-  packageCoverage: [], // NEW: Track packages and their covered spaces
+  selectedItems: [] as SelectionItem[],
+  lockedResourceIds: [] as number[],
+  resourceMap: null as Record<number, ResourceFootprint> | null,
+  packageCoverage: [] as PackageCoverage[],
   selectedDate: "",
-  selectedSlotWindows: [],
+  selectedSlotWindows: [] as SelectedSlotWindow[],
   selectedStartTime: "",
   selectedEndTime: "",
-  availableExtras: [],
-  selectedExtras: [],
+  availableExtras: [] as Extra[],
+  selectedExtras: [] as SelectedExtra[],
   customerInfo: { ...DEFAULT_CUSTOMER },
-  packageQuestionAnswers: {},
-  customerFields: [],
-  checkoutUrl: null,
-  bookingId: null,
-  bookingStatus: "pending",
+  packageQuestionAnswers: {} as Record<string, PackageQuestionAnswerValue>,
+  customerFields: [] as CustomField[],
+  checkoutUrl: null as string | null,
+  bookingId: null as number | null,
+  bookingStatus: "pending" as const,
   totalPrice: 0,
-  priceBreakdown: [],
-  extrasDetails: [],
+  priceBreakdown: [] as PriceBreakdownItem[],
+  extrasDetails: [] as import("@/types").ExtraDetail[],
   isConfirmed: false,
   hasCartBooking: false,
+});
+
+const buildPackageCoverage = (items: SelectionItem[]): PackageCoverage[] =>
+  items
+    .filter((item): item is Extract<SelectionItem, { type: "package" }> => item.type === "package")
+    .map((pkg) => {
+      const coveredSpaceIds = Array.isArray(pkg.space_ids) && pkg.space_ids.length > 0
+        ? pkg.space_ids.map((id) => Number(id)).filter((id) => id > 0)
+        : pkg.space_id
+          ? [Number(pkg.space_id)]
+          : [];
+
+      return {
+        packageId: Number(pkg.id),
+        packageTitle: pkg.title || "Package",
+        coveredSpaceIds,
+      };
+    })
+    .filter((pkg) => pkg.coveredSpaceIds.length > 0);
+
+const hasCustomerInfo = (customerInfo: CustomerInfo): boolean =>
+  Object.values(customerInfo).some((value) => {
+    if (Array.isArray(value)) return value.length > 0;
+    if (typeof value === "boolean") return value;
+    return String(value ?? "").trim().length > 0;
+  });
+
+const isBrowser = (): boolean =>
+  typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+
+export const getBookingDraftStorageKey = (): string => {
+  if (!isBrowser()) {
+    return `${DRAFT_STORAGE_PREFIX}server`;
+  }
+
+  const appEl = document.getElementById("sb-booking-app") as HTMLElement | null;
+  const path = window.location.pathname.replace(/\/+$/, "") || "/";
+  const spaceId = appEl?.dataset.spaceId || "all";
+  const packageId = appEl?.dataset.packageId || "all";
+
+  return `${DRAFT_STORAGE_PREFIX}${path}::space:${spaceId}::package:${packageId}`;
+};
+
+const clearStoredDraft = (): void => {
+  if (!isBrowser()) return;
+
+  try {
+    window.localStorage.removeItem(getBookingDraftStorageKey());
+  } catch (error) {
+    console.error("Failed to clear booking draft:", error);
+  }
+};
+
+const getPersistedDraft = (state: BookingState): PersistedBookingDraft => ({
+  version: 1,
+  currentStep:
+    state.currentStep > MAX_DRAFT_STEP ? MAX_DRAFT_STEP : state.currentStep,
+  selectedItems: state.selectedItems,
+  selectedDate: state.selectedDate,
+  selectedSlotWindows: state.selectedSlotWindows,
+  selectedStartTime: state.selectedStartTime,
+  selectedEndTime: state.selectedEndTime,
+  selectedExtras: state.selectedExtras,
+  customerInfo: state.customerInfo,
+  packageQuestionAnswers: state.packageQuestionAnswers,
+});
+
+const hasDraftContent = (draft: PersistedBookingDraft): boolean =>
+  draft.selectedItems.length > 0 ||
+  draft.selectedDate.length > 0 ||
+  draft.selectedSlotWindows.length > 0 ||
+  draft.selectedStartTime.length > 0 ||
+  draft.selectedEndTime.length > 0 ||
+  draft.selectedExtras.length > 0 ||
+  hasCustomerInfo(draft.customerInfo) ||
+  Object.keys(draft.packageQuestionAnswers).length > 0;
+
+const persistDraft = (state: BookingState): void => {
+  if (!isBrowser()) return;
+
+  const draft = getPersistedDraft(state);
+
+  if (
+    state.currentStep >= 7 ||
+    state.isConfirmed ||
+    state.hasCartBooking ||
+    !hasDraftContent(draft)
+  ) {
+    clearStoredDraft();
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(
+      getBookingDraftStorageKey(),
+      JSON.stringify(draft),
+    );
+  } catch (error) {
+    console.error("Failed to persist booking draft:", error);
+  }
+};
+
+const parseDraft = (raw: string | null): PersistedBookingDraft | null => {
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<PersistedBookingDraft>;
+    if (parsed.version !== 1) return null;
+    if (!Array.isArray(parsed.selectedItems)) return null;
+    if (!Array.isArray(parsed.selectedSlotWindows)) return null;
+    if (!Array.isArray(parsed.selectedExtras)) return null;
+    if (!parsed.customerInfo || typeof parsed.customerInfo !== "object") return null;
+    if (
+      !parsed.packageQuestionAnswers ||
+      typeof parsed.packageQuestionAnswers !== "object"
+    ) {
+      return null;
+    }
+
+    const currentStep =
+      typeof parsed.currentStep === "number"
+        ? (Math.min(Math.max(parsed.currentStep, 1), MAX_DRAFT_STEP) as BookingStep)
+        : 1;
+
+    return {
+      version: 1,
+      currentStep,
+      selectedItems: parsed.selectedItems as SelectionItem[],
+      selectedDate:
+        typeof parsed.selectedDate === "string" ? parsed.selectedDate : "",
+      selectedSlotWindows:
+        parsed.selectedSlotWindows as SelectedSlotWindow[],
+      selectedStartTime:
+        typeof parsed.selectedStartTime === "string"
+          ? parsed.selectedStartTime
+          : "",
+      selectedEndTime:
+        typeof parsed.selectedEndTime === "string" ? parsed.selectedEndTime : "",
+      selectedExtras: parsed.selectedExtras as SelectedExtra[],
+      customerInfo: parsed.customerInfo as CustomerInfo,
+      packageQuestionAnswers:
+        parsed.packageQuestionAnswers as Record<
+          string,
+          PackageQuestionAnswerValue
+        >,
+    };
+  } catch (error) {
+    console.error("Failed to parse booking draft:", error);
+    return null;
+  }
+};
+
+const getRestorableStep = (draft: PersistedBookingDraft): BookingStep => {
+  if (draft.selectedItems.length === 0) {
+    return 1;
+  }
+
+  if (!draft.selectedDate || !draft.selectedStartTime || !draft.selectedEndTime) {
+    return draft.currentStep > 2 ? 2 : draft.currentStep;
+  }
+
+  return draft.currentStep;
+};
+
+export const useBookingStore = create<BookingState>()((set, get) => ({
+  // ── Initial state ────────────────────────────────────────────────────────
+  ...createInitialBookingState(),
 
   // ── Navigation ───────────────────────────────────────────────────────────
   setStep: (step: BookingStep) => set({ currentStep: step }),
@@ -191,7 +375,11 @@ export const useBookingStore = create<BookingState>()((set, get) => ({
           console.log("  Package", id, "footprint:", data.footprint);
         }
       }
-      set({ resourceMap: map });
+      set({
+        resourceMap: map,
+        lockedResourceIds: computeLockedResourceIds(get().selectedItems, map),
+        packageCoverage: buildPackageCoverage(get().selectedItems),
+      });
     } catch (e) {
       console.error("Failed to load resource map:", e);
     }
@@ -814,7 +1002,9 @@ clearItems: () => set({ selectedItems: [], lockedResourceIds: [], packageCoverag
     bookingId: number;
     totalPrice: number;
     breakdown: PriceBreakdownItem[];
-  }) => set({ checkoutUrl, bookingId, totalPrice, priceBreakdown: breakdown }),
+  }) => {
+    set({ checkoutUrl, bookingId, totalPrice, priceBreakdown: breakdown });
+  },
 
   setPriceBreakdown: (breakdown: PriceBreakdownItem[], total: number, extrasDetails: import("@/types").ExtraDetail[] = []) => {
     console.group("💰 STORE setPriceBreakdown");
@@ -828,6 +1018,7 @@ clearItems: () => set({ selectedItems: [], lockedResourceIds: [], packageCoverag
 
   // ── Step 6 ───────────────────────────────────────────────────────────────
   confirmBooking: () => {
+    clearStoredDraft();
     set({ isConfirmed: true });
     get().reset();
   },
@@ -840,6 +1031,7 @@ clearItems: () => set({ selectedItems: [], lockedResourceIds: [], packageCoverag
     try {
       const res = await checkCartHasBooking();
       if (res.hasCartBooking) {
+        clearStoredDraft();
         get().reset();
         set({ hasCartBooking: true });
       } else {
@@ -856,6 +1048,7 @@ clearItems: () => set({ selectedItems: [], lockedResourceIds: [], packageCoverag
   // ── Booking Status ───────────────────────────────────────────────────────
   loadBookingStatus: async (id: number) => {
     try {
+      clearStoredDraft();
       const res = await fetch(`${window.sbConfig.apiBase}/bookings/${id}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
@@ -885,30 +1078,56 @@ clearItems: () => set({ selectedItems: [], lockedResourceIds: [], packageCoverag
   setBookingStatus: (status: "pending" | "in_review" | "error") =>
     set({ bookingStatus: status }),
 
-reset: () => {
+  hydrateDraft: () => {
+    if (!isBrowser()) return false;
+
+    const draft = parseDraft(
+      window.localStorage.getItem(getBookingDraftStorageKey()),
+    );
+
+    if (!draft) {
+      clearStoredDraft();
+      return false;
+    }
+
+    const resourceMap = get().resourceMap;
+    const selectedItems = draft.selectedItems;
+
     set({
-      currentStep: 1,
-      bookingPolicy: "",
-      selectedItems: [],
-      lockedResourceIds: [],
-      resourceMap: null,
-      packageCoverage: [],
-      selectedDate: "",
-      selectedSlotWindows: [],
-      selectedStartTime: "",
-      selectedEndTime: "",
+      currentStep: getRestorableStep(draft),
+      selectedItems,
+      lockedResourceIds: computeLockedResourceIds(selectedItems, resourceMap),
+      packageCoverage: buildPackageCoverage(selectedItems),
+      selectedDate: draft.selectedDate,
+      selectedSlotWindows: draft.selectedSlotWindows,
+      selectedStartTime: draft.selectedStartTime,
+      selectedEndTime: draft.selectedEndTime,
       availableExtras: [],
-      selectedExtras: [],
-      customerInfo: { ...DEFAULT_CUSTOMER },
-      packageQuestionAnswers: {},
-      customerFields: [],
+      selectedExtras: draft.selectedExtras,
+      customerInfo: { ...DEFAULT_CUSTOMER, ...draft.customerInfo },
+      packageQuestionAnswers: draft.packageQuestionAnswers,
       checkoutUrl: null,
       bookingId: null,
       bookingStatus: "pending",
       totalPrice: 0,
       priceBreakdown: [],
+      extrasDetails: [],
       isConfirmed: false,
       hasCartBooking: false,
     });
+
+    return true;
+  },
+
+  clearDraft: () => {
+    clearStoredDraft();
+  },
+
+  reset: () => {
+    set(createInitialBookingState());
   },
 }));
+
+useBookingStore.subscribe((state) => {
+  persistDraft(state);
+});

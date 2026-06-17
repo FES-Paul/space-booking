@@ -235,6 +235,7 @@ declare global {
       symbol: string;
       dateFormat: string;
       bookingPolicy: string;
+      checkoutUrl?: string;
       recaptcha?: {
         enabled: boolean;
         version: "v2" | "v3";

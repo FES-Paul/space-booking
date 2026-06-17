@@ -17,9 +17,10 @@ interface Props {
 }
 
 export function BookingApp({ preSpaceId, prePackageId }: Props) {
-  const { setStep, bookingId, loadBookingStatus, loadResourceMap, hasPackageQuestionsStep } =
+  const { setStep, loadBookingStatus, loadResourceMap, hasPackageQuestionsStep } =
     useBookingStore((state) => state);
   const currentStep = useBookingStore((s) => s.currentStep);
+  const [isInitializing, setIsInitializing] = useState(true);
   const [isCartGateLoading, setIsCartGateLoading] = useState(true);
   const [hasCartBookingGate, setHasCartBookingGate] = useState(false);
   const [isClearingCart, setIsClearingCart] = useState(false);
@@ -39,25 +40,33 @@ export function BookingApp({ preSpaceId, prePackageId }: Props) {
     if (directBookingId) {
       const id = parseInt(directBookingId);
       if (!isNaN(id)) {
+        useBookingStore.getState().clearDraft();
         useBookingStore.setState({ bookingId: id, currentStep: 7 });
         loadBookingStatus(id);
-        return; // Skip other init logic
+        setIsInitializing(false);
+        return;
       }
     }
-  }, []);
+
+    useBookingStore.getState().hydrateDraft();
+    setIsInitializing(false);
+  }, [loadBookingStatus]);
 
   // Cart/session check + cleanup
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("step") === "7" && bookingId) {
+    if (isInitializing) return;
+
+    const store = useBookingStore.getState();
+    if (store.currentStep === 7 && store.bookingId) {
       setIsCartGateLoading(false);
-      return; // Direct confirmation
+      return;
     }
 
     const initCartCheck = async () => {
       try {
         const res = await checkCartHasBooking();
         if (res.hasCartBooking) {
+          useBookingStore.getState().clearDraft();
           setHasCartBookingGate(true);
           return;
         }
@@ -70,10 +79,15 @@ export function BookingApp({ preSpaceId, prePackageId }: Props) {
 
     initCartCheck();
     loadResourceMap();
-  }, []);
+  }, [isInitializing, loadResourceMap]);
 
   // Pre-select space or package from shortcode attributes
   useEffect(() => {
+    const store = useBookingStore.getState();
+    if (store.selectedItems.length > 0 || store.currentStep > 1) {
+      return;
+    }
+
     if (preSpaceId) {
       fetchSpace(preSpaceId)
         .then((space) => {
@@ -114,6 +128,7 @@ export function BookingApp({ preSpaceId, prePackageId }: Props) {
     setIsClearingCart(true);
     try {
       await clearCartBooking();
+      useBookingStore.getState().setHasCartBooking(false);
       setHasCartBookingGate(false);
     } catch {
       // Keep gate shown if clear fails.
@@ -122,11 +137,13 @@ export function BookingApp({ preSpaceId, prePackageId }: Props) {
     }
   };
 
-  if (isCartGateLoading) {
+  if (isInitializing || isCartGateLoading) {
     return (
       <div className="sb-app">
         <div className="sb-step-container">
-          <div className="sb-loading">Checking existing cart booking...</div>
+          <div className="sb-loading">
+            {isInitializing ? "Restoring saved booking..." : "Checking existing cart booking..."}
+          </div>
         </div>
       </div>
     );

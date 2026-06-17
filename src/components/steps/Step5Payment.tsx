@@ -274,6 +274,10 @@ export function Step5Payment() {
         package_question_answers: buildPackageQuestionPayload(),
       });
 
+      if (res.cart_added_directly) {
+        useBookingStore.getState().setHasCartBooking(true);
+      }
+
       useBookingStore.getState().setCheckoutData({
         checkoutUrl: res.checkout_url,
         bookingId: res.booking_id,
