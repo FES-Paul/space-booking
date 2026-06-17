@@ -1590,6 +1590,69 @@ button.sb-slot.sb-slot--selected:focus .sb-slot__meta {
   margin-bottom: 0;
 }
 
+.sb-final-review-alert {
+  position: relative;
+  padding: 16px 18px 15px;
+  border: 1px solid #c96b1d;
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.75), transparent 34%),
+    linear-gradient(135deg, #fff6cc 0%, #ffe0a3 52%, #ffd18a 100%);
+  box-shadow: 0 12px 24px rgba(185, 74, 0, 0.12);
+}
+
+.sb-final-review-alert::before {
+  content: "!";
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #b94a00;
+  color: #fff;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.sb-final-review-alert__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  margin-bottom: 8px;
+  border-radius: 999px;
+  background: rgba(185, 74, 0, 0.12);
+  color: #7a2f00;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.sb-final-review-alert__title {
+  max-width: 92%;
+  margin: 0 0 8px;
+  font-size: 18px;
+  line-height: 1.3;
+  color: #5b2200;
+}
+
+.sb-final-review-alert__text {
+  max-width: 95%;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #693000;
+}
+
+.sb-final-review-alert__text + .sb-final-review-alert__text {
+  margin-top: 6px;
+}
+
 .sb-review-section__header {
   display: flex;
   align-items: center;
@@ -2062,6 +2125,32 @@ button.sb-slot.sb-slot--selected:focus .sb-slot__meta {
   .sb-checkout-summary .sb-summary-row {
     flex-direction: column;
     gap: 4px;
+  }
+
+  .sb-final-review-alert {
+    padding: 14px 15px 14px;
+  }
+
+  .sb-final-review-alert::before {
+    top: 12px;
+    right: 12px;
+    width: 28px;
+    height: 28px;
+    font-size: 18px;
+  }
+
+  .sb-final-review-alert__title,
+  .sb-final-review-alert__text {
+    max-width: none;
+  }
+
+  .sb-final-review-alert__title {
+    font-size: 17px;
+    padding-right: 32px;
+  }
+
+  .sb-final-review-alert__text {
+    font-size: 13px;
   }
 
   .sb-review-section__header,

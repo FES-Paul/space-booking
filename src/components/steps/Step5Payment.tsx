@@ -560,6 +560,21 @@ export function Step5Payment() {
         {recaptchaProtectionActive && recaptchaVersion === "v2" && (
           <div style={{ margin: "12px 0" }}><div id="sb-recaptcha-v2"></div></div>
         )}
+        <div className="sb-final-review-alert" role="alert" aria-live="polite">
+          <div className="sb-final-review-alert__eyebrow">Important</div>
+          <h4 className="sb-final-review-alert__title">
+            This is the last step where you can still change your booking.
+          </h4>
+          <p className="sb-final-review-alert__text">
+            Please check everything now and make sure all details are correct.
+          </p>
+          <p className="sb-final-review-alert__text">
+            After you proceed to secure payment, this booking can no longer be changed.
+          </p>
+          <p className="sb-final-review-alert__text">
+            If you made a mistake, do not pay the wrong booking. Just create a new booking again with the correct details.
+          </p>
+        </div>
         <input type="text" name="website_url" value="" onChange={() => {}} autoComplete="off" tabIndex={-1} aria-hidden="true" style={{ position: "absolute", left: "-9999px", opacity: 0, pointerEvents: "none" }} />
         <div className="sb-step__actions">
           <button className="sb-btn sb-btn--ghost" onClick={prevStep}>← Back</button>
