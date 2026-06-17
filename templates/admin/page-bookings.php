@@ -84,6 +84,9 @@ function sb_format_time_12hour(string $time): string
     padding: 6px 8px;
     margin: 4px 0;
     font-size: 13px;
+
+    display: flex !important;
+    flex-direction: column;
 }
 
 .sb-status {
@@ -92,6 +95,7 @@ function sb_format_time_12hour(string $time): string
     font-size: 11px;
     font-weight: 500;
     text-transform: uppercase;
+    width: fit-content;
 }
 
 .sb-status--confirmed {
