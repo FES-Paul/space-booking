@@ -156,7 +156,7 @@ export function Step4Terms() {
         </div>
 
         <div className="sb-note sb-policy-note">
-          Scroll to the bottom of the terms above to enable the checkbox.
+          <strong>Scroll to the bottom of the terms above to enable the checkbox.</strong>
         </div>
 
         <label className="sb-checkbox-label">
